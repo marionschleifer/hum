@@ -1,0 +1,9 @@
+{
+  "name": "Hum",
+  "short_name": "Hum",
+  "start_url": "/#/today",
+  "display": "standalone",
+  "background_color": "#f7f5f2",
+  "theme_color": "#f7f5f2",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
