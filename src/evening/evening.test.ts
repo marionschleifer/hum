@@ -149,6 +149,49 @@ describe("wrapUpDay", () => {
     expect(listLearnings(ctx).map((l) => [l.text, l.source])).toEqual([["Personal tasks slip on busy days.", "evening"]]);
   });
 
+  it("records the time spent per theme with the wrap-up", async () => {
+    const { ctx, plan } = setup();
+    await plan(day1, 180);
+    expect(eveningView(ctx, day1).time).toEqual({
+      themes: [
+        { themeId: "accounto", budget: 0, openMinutes: 0 },
+        { themeId: "code-blossom", budget: 0, openMinutes: 0 },
+        { themeId: "hvnly", budget: 0, openMinutes: 0 },
+        { themeId: "personal", budget: 180, openMinutes: 0 },
+        { themeId: "exercise", budget: 0, openMinutes: 0 },
+      ],
+    });
+    await wrapUpDay({ ctx }, day1, [], { personal: 240, accounto: 30 });
+    expect(eveningView(ctx, day1).time.spent).toEqual({ personal: 240, accounto: 30 });
+  });
+
+  it("leaves the time unrecorded when the wrap-up has none", async () => {
+    const { ctx, plan } = setup();
+    await plan(day1);
+    await wrapUpDay({ ctx }, day1, []);
+    expect(eveningView(ctx, day1).time.spent).toBeUndefined();
+  });
+
+  it("looks for a learning in recorded time even without postponements", async () => {
+    const { ctx, plan } = setup();
+    let seen: LearnInput | undefined;
+    const findLearning = async (input: LearnInput) => {
+      seen = input;
+      return { learning: "Personal runs an hour over its budget." };
+    };
+    for (const day of ["2026-10-17", "2026-10-18", "2026-10-19"]) {
+      await plan(day, 120);
+      await wrapUpDay({ ctx, findLearning }, day, [], { personal: 180 });
+    }
+    expect(seen?.postponements).toEqual([]);
+    expect(seen?.timeSpent.map((r) => [r.date, r.theme, r.budget, r.spent])).toEqual([
+      ["2026-10-17", "Personal", 120, 180],
+      ["2026-10-18", "Personal", 120, 180],
+      ["2026-10-19", "Personal", 120, 180],
+    ]);
+    expect(listLearnings(ctx).map((l) => l.text)).toEqual(["Personal runs an hour over its budget."]);
+  });
+
   it("needs a plan and valid reasons", async () => {
     const { ctx, add, plan } = setup();
     await expect(wrapUpDay({ ctx }, day1, [])).rejects.toThrow("no plan");

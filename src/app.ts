@@ -33,6 +33,7 @@ import {
 import { captureAudio, captureText, describeCapture, type CaptureResult } from "./capture/capture.ts";
 import { fail, isHttpError, type Ctx } from "./context.ts";
 import { eveningView, pendingEvening, wrapUpDay, type Answer } from "./evening/evening.ts";
+import { recordTimeSpent, weekSummary } from "./timespent/timespent.ts";
 import { applySuggestion, dismissSuggestion, listPendingSuggestions } from "./evening/suggestions.ts";
 import {
   authorizationUrl,
@@ -46,7 +47,7 @@ import { createRouter, json, readJson, type Handler, type Route } from "./http/r
 import { previewImport, runImport, type ImportTarget, type TodoistData } from "./import/todoist.ts";
 import { addLearning, deleteLearning, listLearnings, updateLearning } from "./learnings/learnings.ts";
 import { giveTimeToday, letGo, moveAtRisk, moveDeadline, scheduleForTomorrow, splitFirstStep } from "./planning/at-risk.ts";
-import { makeDayPlan, parseMorningNote, pickForToday, todayView, type PlanRequest } from "./planning/dayplans.ts";
+import { makeDayPlan, parseMorningNote, parseTimeSpent, pickForToday, todayView, type PlanRequest } from "./planning/dayplans.ts";
 import { createProject, listProjects, updateProject, type ProjectInput, type ProjectPatch } from "./projects/projects.ts";
 import {
   completeTask,
@@ -370,10 +371,21 @@ function eveningRoutes(deps: AppDeps): Route[] {
     guard("GET", "/api/evening", (request) => json(eveningView(ctx, todayOr(ctx, query(request, "date"))))),
     guard("GET", "/api/evening/pending", (request) => json({ date: pendingEvening(ctx, todayOr(ctx, query(request, "today"))) })),
     guard("POST", "/api/evening", async (request) => {
-      const body = await readJson<{ date?: string; answers?: Answer[] }>(request);
+      const body = await readJson<{ date?: string; answers?: Answer[]; timeSpent?: Record<string, number> }>(request);
       if (!body.date) fail(400, "Which day is this for?");
-      return json(await wrapUpDay(eveningDeps(), body.date, Array.isArray(body.answers) ? body.answers : []));
+      return json(await wrapUpDay(eveningDeps(), body.date, Array.isArray(body.answers) ? body.answers : [], body.timeSpent));
     }),
+    guard("PUT", "/api/evening/time", async (request) => {
+      const body = await readJson<{ date?: string; timeSpent?: Record<string, number> }>(request);
+      if (!body.date) fail(400, "Which day is this for?");
+      if (!body.timeSpent || typeof body.timeSpent !== "object") fail(400, "How much time did you spend?");
+      return json({ timeSpent: recordTimeSpent(ctx, body.date, body.timeSpent) });
+    }),
+    guard("POST", "/api/evening/time/parse", async (request) => {
+      const body = await readJson<{ text?: string }>(request);
+      return json({ timeSpent: await parseTimeSpent({ ctx, parseBudgets: deps.parseBudgets }, body.text ?? "") });
+    }),
+    guard("GET", "/api/week", (request) => json(weekSummary(ctx, todayOr(ctx, query(request, "date"))))),
     guard("GET", "/api/suggestions", () => json(listPendingSuggestions(ctx))),
     guard("POST", "/api/suggestions/:id/apply", async (request, { id }) =>
       json(applySuggestion(ctx, id!, todayOr(ctx, (await optionalJson<{ today?: string }>(request)).today))),

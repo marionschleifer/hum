@@ -182,6 +182,22 @@ export async function parseMorningNote(
   };
 }
 
+export async function parseTimeSpent(deps: Pick<PlanDeps, "ctx" | "parseBudgets">, text: string): Promise<Record<string, number>> {
+  if (!text.trim()) fail(400, "Say or type how much time each theme got");
+  if (!deps.parseBudgets) fail(503, "Reading time from text needs ANTHROPIC_API_KEY");
+  const themes = listThemes(deps.ctx);
+  const raw = (await deps.parseBudgets(text, themes.map((theme) => theme.name), "spent")) as {
+    budgets?: { theme?: unknown; minutes?: unknown }[];
+  };
+  const spent: Record<string, number> = {};
+  for (const entry of Array.isArray(raw?.budgets) ? raw.budgets : []) {
+    const theme = themes.find((t) => normalizeName(t.name) === normalizeName(String(entry?.theme ?? "")));
+    const minutes = Number(entry?.minutes);
+    if (theme && Number.isFinite(minutes)) spent[theme.id] = clampMinutes(minutes);
+  }
+  return spent;
+}
+
 async function chooseWithClaude(
   deps: PlanDeps,
   context: {

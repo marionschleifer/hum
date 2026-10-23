@@ -4,6 +4,7 @@ import { fail, isoNow, type Ctx } from "../context.ts";
 import { addLearning, learningTexts, type Learning } from "../learnings/learnings.ts";
 import { checkDate, dropTask, getTask, type Task } from "../tasks/tasks.ts";
 import { listThemes } from "../themes/themes.ts";
+import { dayTime, recentTimeRecords, recordTimeSpent, type ThemeTime } from "../timespent/timespent.ts";
 import { suggestForPostponed, type Suggestion } from "./suggestions.ts";
 
 export const postponeReasons = ["no_time", "blocked", "didnt_want", "not_relevant", "other"] as const;
@@ -17,6 +18,7 @@ export type EveningView = {
   wrappedUpAt?: string;
   items: EveningItem[];
   doneUnplanned: Task[];
+  time: { themes: Omit<ThemeTime, "spent">[]; spent?: Record<string, number> };
 };
 
 export type Answer = { taskId: string; reason: PostponeReason; note?: string };
@@ -48,6 +50,7 @@ export function eveningView(ctx: Ctx, date: string): EveningView {
       return task ? [{ task, themeId: row.theme_id, minutes: row.minutes, doneToday: completed.has(task.id) }] : [];
     });
   const planned = new Set(items.map((item) => item.task.id));
+  const day = dayTime(ctx, date);
   return {
     date,
     hasPlan: plan !== null,
@@ -59,6 +62,12 @@ export function eveningView(ctx: Ctx, date: string): EveningView {
         const task = getTask(ctx, id);
         return task ? [task] : [];
       }),
+    time: {
+      themes: day.themes.map(({ spent: _, ...theme }) => theme),
+      ...(day.recorded
+        ? { spent: Object.fromEntries(day.themes.flatMap((t) => (t.spent === undefined ? [] : [[t.themeId, t.spent]]))) }
+        : {}),
+    },
   };
 }
 
@@ -76,7 +85,12 @@ export function pendingEvening(ctx: Ctx, today: string): string | undefined {
   return latest;
 }
 
-export async function wrapUpDay(deps: EveningDeps, date: string, answers: Answer[]): Promise<WrapUpResult> {
+export async function wrapUpDay(
+  deps: EveningDeps,
+  date: string,
+  answers: Answer[],
+  timeSpent?: Record<string, number>,
+): Promise<WrapUpResult> {
   const { ctx } = deps;
   const view = eveningView(ctx, date);
   if (!view.hasPlan) fail(409, "There is no plan for that day");
@@ -85,6 +99,7 @@ export async function wrapUpDay(deps: EveningDeps, date: string, answers: Answer
   for (const answer of answers) {
     if (!postponeReasons.includes(answer.reason)) fail(400, "Invalid reason");
   }
+  if (timeSpent) recordTimeSpent(ctx, date, timeSpent);
   const undone = view.items.filter((item) => !item.doneToday && item.task.status === "open");
   const now = isoNow(ctx);
   const postponedIds: string[] = [];
@@ -123,12 +138,15 @@ async function maybeLearn(deps: EveningDeps, date: string): Promise<Learning | u
       "SELECT task_id, date, reason, note FROM postponements WHERE date > ? AND date <= ? ORDER BY date",
     )
     .all(since, date);
-  if (rows.length < 3) return undefined;
+  const timeRecords = recentTimeRecords(ctx, date);
+  const recordedDays = new Set(timeRecords.map((record) => record.date)).size;
+  if (rows.length < 3 && recordedDays < 3) return undefined;
   const themes = listThemes(ctx, { includeArchived: true });
   try {
     const raw = (await deps.findLearning({
       today: date,
       learnings: learningTexts(ctx),
+      timeSpent: timeRecords,
       postponements: rows.map((row) => {
         const task = getTask(ctx, row.task_id);
         return {

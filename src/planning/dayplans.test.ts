@@ -4,7 +4,7 @@ import type { PlanChoiceInput } from "../ai/planning.ts";
 import { saveCalendarSettings } from "../calendar/calendar.ts";
 import type { GoogleApi } from "../google/google.ts";
 import { completeTask, createTask, getTask } from "../tasks/tasks.ts";
-import { makeDayPlan, parseMorningNote, pickForToday, todayView } from "./dayplans.ts";
+import { makeDayPlan, parseMorningNote, parseTimeSpent, pickForToday, todayView } from "./dayplans.ts";
 
 const today = "2026-10-17";
 const tz = "Europe/Zurich";
@@ -319,5 +319,20 @@ describe("parseMorningNote", () => {
     const { ctx } = setup();
     await expect(parseMorningNote({ ctx }, " ")).rejects.toThrow("Say or type");
     await expect(parseMorningNote({ ctx }, "3h accounto")).rejects.toThrow("ANTHROPIC_API_KEY");
+  });
+});
+
+describe("parseTimeSpent", () => {
+  it("turns an evening note into minutes per theme", async () => {
+    const { ctx } = setup();
+    let asked: string | undefined;
+    const parseBudgets = async (_text: string, _themes: string[], kind?: string) => {
+      asked = kind;
+      return { budgets: [{ theme: "accounto", minutes: 330 }, { theme: "Code Blossom", minutes: 0 }, { theme: "Unknown", minutes: 5 }] };
+    };
+    expect(await parseTimeSpent({ ctx, parseBudgets }, "accounto 5 and a half, code blossom none")).toEqual({ accounto: 330, "code-blossom": 0 });
+    expect(asked).toBe("spent");
+    await expect(parseTimeSpent({ ctx }, " ")).rejects.toThrow("Say or type");
+    await expect(parseTimeSpent({ ctx }, "accounto 2h")).rejects.toThrow("ANTHROPIC_API_KEY");
   });
 });

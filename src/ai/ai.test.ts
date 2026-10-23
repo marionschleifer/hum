@@ -72,7 +72,7 @@ describe("the owner and the scheduling-only theme in prompts", () => {
     learnings: [],
     tasks: [{ taskId: "t1", title: "Fence", priority: "normal", essential: false, isAccounto, history: [], ruleAction: "do_first" }],
   });
-  const learnInput = { today: "2026-10-17", learnings: [], postponements: [] };
+  const learnInput = { today: "2026-10-17", learnings: [], postponements: [], timeSpent: [] };
   const everyPrompt = (ownerName?: string, isAccounto = false) => [
     captureRequest("m", "x", isAccounto ? context : personalOnly, ownerName),
     choosePlanRequest("m", planInput(isAccounto), ownerName),
@@ -194,14 +194,14 @@ describe("evening requests", () => {
   });
 
   it("asks for at most one new learning", () => {
-    const request = learnRequest("claude-sonnet-5-5", { today: "2026-10-17", learnings: [], postponements: [] });
+    const request = learnRequest("claude-sonnet-5-5", { today: "2026-10-17", learnings: [], postponements: [], timeSpent: [] });
     expect(request.output_config.format.schema.properties).toHaveProperty("learning");
     expect(request.system).toContain("at least three postponements");
   });
 
   it("sends through the shared structured call", async () => {
     const { fn } = fakeFetch(200, { stop_reason: "end_turn", content: [{ type: "text", text: '{"learning":"x"}' }] });
-    expect(await createFindLearning({ apiKey: "k", model: "m", fetch: fn })({ today: "2026-10-17", learnings: [], postponements: [] })).toEqual({
+    expect(await createFindLearning({ apiKey: "k", model: "m", fetch: fn })({ today: "2026-10-17", learnings: [], postponements: [], timeSpent: [] })).toEqual({
       learning: "x",
     });
     const suggest = fakeFetch(200, { stop_reason: "end_turn", content: [{ type: "text", text: '{"suggestions":[]}' }] });

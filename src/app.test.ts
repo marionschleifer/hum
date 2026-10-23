@@ -314,6 +314,23 @@ describe("calendar and planning", () => {
   });
 });
 
+describe("time spent", () => {
+  it("records it with the wrap-up, edits it later, reads it from words and sums up the week", async () => {
+    const { as } = await loggedIn({
+      parseBudgets: async (_text: string, _themes: string[], kind?: string) =>
+        kind === "spent" ? { budgets: [{ theme: "Accounto", minutes: 330 }] } : { budgets: [] },
+    });
+    await as("POST", "/api/plan", { today: "2026-10-19", energy: "normal", budgets: { accounto: 360 }, openWork: { accounto: 60 } });
+    expect((await as("GET", "/api/evening?date=2026-10-19")).body.time.themes[0]).toEqual({ themeId: "accounto", budget: 360, openMinutes: 60 });
+    expect((await as("POST", "/api/evening/time/parse", { text: "accounto five and a half" })).body).toEqual({ timeSpent: { accounto: 330 } });
+    expect((await as("POST", "/api/evening", { date: "2026-10-19", answers: [], timeSpent: { accounto: 330 } })).status).toBe(200);
+    expect((await as("PUT", "/api/evening/time", { date: "2026-10-19", timeSpent: { accounto: 300 } })).body).toEqual({ timeSpent: { accounto: 300 } });
+    expect((await as("PUT", "/api/evening/time", { date: "2026-10-19" })).status).toBe(400);
+    const week = (await as("GET", "/api/week?date=2026-10-21")).body;
+    expect(week.totals.find((t: { themeId: string }) => t.themeId === "accounto")).toMatchObject({ budget: 360, spent: 300, recordedDays: 1 });
+  });
+});
+
 describe("evening", () => {
   it("wraps up a planned day and handles suggestions and learnings", async () => {
     const { as } = await loggedIn();
