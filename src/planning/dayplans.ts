@@ -24,6 +24,7 @@ export type PlanRequest = {
   energy: Energy;
   energyNote?: string;
   budgets: Record<string, number>;
+  openWork?: Record<string, number>;
 };
 
 export type PlannedTask = PlanItem & { task: Task; doneToday: boolean };
@@ -35,6 +36,7 @@ export type DayPlanView = {
   energyNote?: string;
   aiNote?: string;
   budgets: Record<string, number>;
+  openWork: Record<string, number>;
   createdAt: string;
   replannedAt?: string;
   wrappedUpAt?: string;
@@ -65,12 +67,14 @@ export async function makeDayPlan(deps: PlanDeps, request: PlanRequest): Promise
   if (!energies.includes(request.energy)) fail(400, "Invalid energy");
   const themes = listThemes(ctx);
   const budgets = cleanBudgets(request.budgets, themes);
+  const openWork = cleanOpenWork(request.openWork ?? {}, budgets, themes);
   const calendar = await readCalendar(deps, today, timeZone);
   const tasks = listTasks(ctx, { status: ["open"] }, today);
   const plans = planDay({
     today,
     energy: request.energy,
     budgets,
+    openWork,
     themeIds: themes.map((theme) => theme.id),
     trainingThemeId: trainingThemeId(themes),
     tasks,
@@ -79,7 +83,7 @@ export async function makeDayPlan(deps: PlanDeps, request: PlanRequest): Promise
     training: sessionsOn(ctx, today),
   });
   const chosen = await chooseWithClaude(deps, { today, energy: request.energy, energyNote: request.energyNote, themes, tasks, plans, meetings: calendar.meetings });
-  saveDayPlan(ctx, today, request, budgets, chosen.plans, chosen.note);
+  saveDayPlan(ctx, today, request, { budgets, openWork }, chosen.plans, chosen.note);
   return todayView(deps, today, timeZone);
 }
 
@@ -93,7 +97,7 @@ export async function todayView(deps: PlanDeps, today: string, timeZone: string)
   const due = open.filter((task) => !task.parentId && task.deadline !== undefined && task.deadline <= today);
   const plan = storedPlan(ctx, today, calendar.meetings, training);
   const plannedIds = new Set(plan?.themes.flatMap((theme) => theme.items.map((item) => item.taskId)) ?? []);
-  const budgets = Object.fromEntries(plan?.themes.map((theme) => [theme.themeId, theme.budget]) ?? []);
+  const budgets = Object.fromEntries(plan?.themes.map((theme) => [theme.themeId, theme.budget - theme.openMinutes]) ?? []);
   const warnings = plan ? atRiskItems(ctx, today, deadlineWarnings({ today, budgets, tasks: withoutLetGo(ctx, open) }, plannedIds), open) : [];
   return {
     date: today,
@@ -151,23 +155,28 @@ export function pickForToday(ctx: Ctx, taskId: string, today: string, options: {
 export async function parseMorningNote(
   deps: PlanDeps,
   text: string,
-): Promise<{ budgets: Record<string, number>; energy?: Energy; note?: string }> {
+): Promise<{ budgets: Record<string, number>; openWork?: Record<string, number>; energy?: Energy; note?: string }> {
   if (!text.trim()) fail(400, "Say or type how much time each theme gets");
   if (!deps.parseBudgets) fail(503, "Reading budgets from text needs ANTHROPIC_API_KEY");
   const themes = listThemes(deps.ctx);
   const raw = (await deps.parseBudgets(text, themes.map((theme) => theme.name))) as {
-    budgets?: { theme?: unknown; minutes?: unknown }[];
+    budgets?: { theme?: unknown; minutes?: unknown; open?: unknown }[];
     energy?: unknown;
     note?: unknown;
   };
   const budgets: Record<string, number> = {};
+  const openWork: Record<string, number> = {};
   for (const entry of Array.isArray(raw?.budgets) ? raw.budgets : []) {
     const theme = themes.find((t) => normalizeName(t.name) === normalizeName(String(entry?.theme ?? "")));
     const minutes = Number(entry?.minutes);
-    if (theme && Number.isFinite(minutes)) budgets[theme.id] = clampMinutes(minutes);
+    if (!theme || !Number.isFinite(minutes)) continue;
+    budgets[theme.id] = clampMinutes(minutes);
+    const open = Number(entry?.open);
+    if (Number.isFinite(open) && open > 0) openWork[theme.id] = Math.min(budgets[theme.id]!, clampMinutes(open));
   }
   return {
     budgets,
+    ...(Object.keys(openWork).length ? { openWork } : {}),
     energy: energies.includes(raw?.energy as Energy) ? (raw.energy as Energy) : undefined,
     note: typeof raw?.note === "string" && raw.note.trim() ? raw.note.trim() : undefined,
   };
@@ -230,7 +239,7 @@ function saveDayPlan(
   ctx: Ctx,
   today: string,
   request: PlanRequest,
-  budgets: Record<string, number>,
+  time: { budgets: Record<string, number>; openWork: Record<string, number> },
   plans: ThemePlan[],
   aiNote: string | undefined,
 ): void {
@@ -239,16 +248,17 @@ function saveDayPlan(
     ctx.db.query("DELETE FROM day_plan_items WHERE date = ?").run(today);
     ctx.db
       .query(
-        `INSERT INTO day_plans (date, energy, energy_note, budgets, ai_note, too_big, created_at, replanned_at)
-         VALUES ($date, $energy, $note, $budgets, $ai, $tooBig, $now, NULL)
-         ON CONFLICT(date) DO UPDATE SET energy = $energy, energy_note = $note, budgets = $budgets, ai_note = $ai,
-           too_big = $tooBig, replanned_at = $now`,
+        `INSERT INTO day_plans (date, energy, energy_note, budgets, open_work, ai_note, too_big, created_at, replanned_at)
+         VALUES ($date, $energy, $note, $budgets, $openWork, $ai, $tooBig, $now, NULL)
+         ON CONFLICT(date) DO UPDATE SET energy = $energy, energy_note = $note, budgets = $budgets, open_work = $openWork,
+           ai_note = $ai, too_big = $tooBig, replanned_at = $now`,
       )
       .run({
         date: today,
         energy: request.energy,
         note: request.energyNote?.trim() || null,
-        budgets: JSON.stringify(budgets),
+        budgets: JSON.stringify(time.budgets),
+        openWork: JSON.stringify(time.openWork),
         ai: aiNote ?? null,
         tooBig: JSON.stringify(
           Object.fromEntries(plans.flatMap((plan) => {
@@ -277,6 +287,7 @@ function storedPlan(ctx: Ctx, today: string, meetings: CalendarEvent[], training
         energy: Energy;
         energy_note: string | null;
         budgets: string;
+        open_work: string;
         ai_note: string | null;
         too_big: string;
         created_at: string;
@@ -288,6 +299,7 @@ function storedPlan(ctx: Ctx, today: string, meetings: CalendarEvent[], training
     .get(today);
   if (!row) return undefined;
   const budgets = JSON.parse(row.budgets) as Record<string, number>;
+  const openWork = JSON.parse(row.open_work) as Record<string, number>;
   const tooBig = JSON.parse(row.too_big) as Record<string, { taskId: string; minutes: number }>;
   const themes = listThemes(ctx);
   const items = ctx.db
@@ -304,6 +316,7 @@ function storedPlan(ctx: Ctx, today: string, meetings: CalendarEvent[], training
     today,
     energy: row.energy,
     budgets,
+    openWork,
     themeIds: themes.map((theme) => theme.id),
     trainingThemeId: trainingThemeId(themes),
     tasks: [],
@@ -316,6 +329,7 @@ function storedPlan(ctx: Ctx, today: string, meetings: CalendarEvent[], training
     energyNote: row.energy_note ?? undefined,
     aiNote: row.ai_note ?? undefined,
     budgets,
+    openWork,
     createdAt: row.created_at,
     replannedAt: row.replanned_at ?? undefined,
     wrappedUpAt: row.wrapped_up_at ?? undefined,
@@ -380,6 +394,18 @@ function cleanBudgets(budgets: Record<string, number>, themes: Theme[]): Record<
     const value = Number(budgets?.[theme.id] ?? 0);
     if (!Number.isFinite(value) || value < 0) fail(400, `Invalid budget for ${theme.name}`);
     clean[theme.id] = clampMinutes(value);
+  }
+  return clean;
+}
+
+function cleanOpenWork(openWork: Record<string, number>, budgets: Record<string, number>, themes: Theme[]): Record<string, number> {
+  const clean: Record<string, number> = {};
+  for (const theme of themes) {
+    const value = Number(openWork?.[theme.id] ?? 0);
+    if (!Number.isFinite(value) || value < 0) fail(400, `Invalid open work for ${theme.name}`);
+    const minutes = clampMinutes(value);
+    if (minutes > (budgets[theme.id] ?? 0)) fail(400, `Open work for ${theme.name} is more than its budget`);
+    if (minutes > 0) clean[theme.id] = minutes;
   }
   return clean;
 }

@@ -52,6 +52,35 @@ describe("makeDayPlan", () => {
     expect((await todayView({ ctx, google: googleWith([standup]) }, today, tz)).plan?.themes.length).toBe(5);
   });
 
+  it("keeps open work free of todos and remembers it", async () => {
+    const { ctx, add } = setup();
+    add("Workflow x");
+    add("Workflow y");
+    const deps = { ctx, google: googleWith([standup]) };
+    await makeDayPlan(deps, { today, timeZone: tz, energy: "normal", budgets: { accounto: 240 }, openWork: { accounto: 120 } });
+    const accounto = (await todayView(deps, today, tz)).plan!.themes.find((t) => t.themeId === "accounto")!;
+    expect(accounto).toMatchObject({ budget: 240, meetingMinutes: 60, openMinutes: 120, available: 60 });
+    expect(accounto.items.map((i) => i.task.title)).toEqual(["Workflow x"]);
+    expect((await todayView(deps, today, tz)).plan!.openWork).toEqual({ accounto: 120 });
+  });
+
+  it("refuses open work that is more than the theme's budget or negative", async () => {
+    const { ctx } = setup();
+    const plan = (openWork: Record<string, number>) =>
+      makeDayPlan({ ctx }, { today, timeZone: tz, energy: "normal", budgets: { accounto: 60 }, openWork });
+    await expect(plan({ accounto: 90 })).rejects.toThrow("Open work for Accounto is more than its budget");
+    await expect(plan({ accounto: -5 })).rejects.toThrow("Invalid open work for Accounto");
+  });
+
+  it("does not warn about deadlines using time that is kept for open work", async () => {
+    const { ctx, add } = setup();
+    add("Big one", { size: "L", deadline: "2026-10-18" });
+    const view = await makeDayPlan({ ctx }, { today, timeZone: tz, energy: "normal", budgets: { accounto: 150 }, openWork: { accounto: 120 } });
+    expect(view.warnings.map((w) => w.detail)).toEqual([
+      "is due tomorrow. About 4h of work in this theme is due by then, and today's pace gives 1h.",
+    ]);
+  });
+
   it("lets Claude choose from the pool but enforces budget and mandatory tasks", async () => {
     const { ctx, add } = setup();
     const essential = add("Essential", { firstOn: today, size: "L" });
@@ -268,6 +297,21 @@ describe("parseMorningNote", () => {
       budgets: { accounto: 180, "code-blossom": 60, exercise: 960 },
       energy: "lower",
       note: "slept badly",
+    });
+  });
+
+  it("reads open work inside a budget, never more than the budget", async () => {
+    const { ctx } = setup();
+    const parseBudgets = async () => ({
+      budgets: [
+        { theme: "Accounto", minutes: 360, open: 120 },
+        { theme: "Personal", minutes: 60, open: 90 },
+        { theme: "hvnly", minutes: 30 },
+      ],
+    });
+    expect(await parseMorningNote({ ctx, parseBudgets }, "6h accounto, 2 of that for email")).toEqual({
+      budgets: { accounto: 360, personal: 60, hvnly: 30 },
+      openWork: { accounto: 120, personal: 60 },
     });
   });
 

@@ -232,4 +232,8 @@ export const migrations: string[] = [
   ])}'
   WHERE EXISTS (SELECT 1 FROM passkeys) OR EXISTS (SELECT 1 FROM training_sessions);
   `,
+  `
+  ALTER TABLE day_plans ADD COLUMN open_work TEXT NOT NULL DEFAULT '{}';
+  ALTER TABLE day_plans ADD COLUMN time_spent TEXT;
+  `,
 ];

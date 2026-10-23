@@ -153,6 +153,17 @@ describe("planning requests", () => {
     expect(request.messages[0]!.content).toContain("<morning_note>\n3h accounto\n</morning_note>");
   });
 
+  it("reads open work in the morning and time spent in the evening", () => {
+    const morning = parseBudgetsRequest("m", "6h work, 2 of that email", ["Work"]);
+    expect(morning.output_config.format.schema.properties.budgets.items.properties).toHaveProperty("open");
+    expect(morning.system).toContain("want to give");
+    const evening = parseBudgetsRequest("m", "work 5 and a half", ["Work"], "Ada", "spent");
+    expect(evening.system).toContain("spent on each theme");
+    expect(evening.system).not.toContain("energy");
+    expect(evening.output_config.format.schema.properties.budgets.items.properties).not.toHaveProperty("open");
+    expect(evening.messages[0]!.content).toContain("<evening_note>\nwork 5 and a half\n</evening_note>");
+  });
+
   it("returns parsed structured output through the shared sender", async () => {
     const { fn } = fakeFetch(200, { stop_reason: "end_turn", content: [{ type: "text", text: '{"budgets":[]}' }] });
     expect(await createParseBudgets({ apiKey: "k", model: "m", fetch: fn })("x", ["A"])).toEqual({ budgets: [] });

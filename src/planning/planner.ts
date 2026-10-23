@@ -19,6 +19,7 @@ export type ThemePlan = {
   budget: number;
   meetingMinutes: number;
   trainingMinutes: number;
+  openMinutes: number;
   available: number;
   items: PlanItem[];
   pool: PoolItem[];
@@ -28,6 +29,7 @@ export type PlanInput = {
   today: string;
   energy: Energy;
   budgets: Record<string, number>;
+  openWork?: Record<string, number>;
   themeIds: string[];
   trainingThemeId?: string;
   tasks: Task[];
@@ -51,14 +53,15 @@ export function planDay(input: PlanInput): ThemePlan[] {
       themeId === input.trainingThemeId && input.energy !== "sick"
         ? input.training.reduce((sum, session) => sum + sessionMinutes(session), 0)
         : 0;
-    const available = Math.max(0, budget - meetingMinutes - training);
+    const openMinutes = Math.min(budget, Math.max(0, Math.round(input.openWork?.[themeId] ?? 0)));
+    const available = Math.max(0, budget - meetingMinutes - training - openMinutes);
     const ranked = candidates
       .filter((task) => task.themeId === themeId)
       .map((task) => ({ task, score: score(task, input) }))
       .sort((a, b) => b.score - a.score || a.task.createdAt.localeCompare(b.task.createdAt));
     const pool = ranked.map(({ task }) => poolItem(task, input));
     const items = selectItems(pool, pool.map((item) => item.taskId), available);
-    return { themeId, budget, meetingMinutes, trainingMinutes: training, available, items, pool };
+    return { themeId, budget, meetingMinutes, trainingMinutes: training, openMinutes, available, items, pool };
   });
 }
 

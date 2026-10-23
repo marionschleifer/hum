@@ -325,6 +325,7 @@ function planRoutes(deps: AppDeps): Route[] {
           energy: body.energy ?? "normal",
           energyNote: body.energyNote,
           budgets: body.budgets ?? {},
+          openWork: body.openWork ?? {},
         }),
       );
     }),

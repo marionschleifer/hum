@@ -81,6 +81,19 @@ describe("planDay", () => {
     expect(ids(plan)).toEqual([small.id]);
   });
 
+  it("keeps open work out of what todos may fill, after meetings", () => {
+    const big = task({ size: "L", priority: "high" });
+    const small = task({ size: "S" });
+    const plan = planDay(input({ budgets: { personal: 180 }, openWork: { personal: 60 }, tasks: [big, small], meetings: [meeting("personal", 30)] }));
+    expect(plan[0]).toMatchObject({ budget: 180, meetingMinutes: 30, openMinutes: 60, available: 90 });
+    expect(ids(plan)).toEqual([small.id]);
+  });
+
+  it("has no open work on a sick day or without a budget", () => {
+    expect(planDay(input({ energy: "sick", openWork: { personal: 60 } }))[0]).toMatchObject({ openMinutes: 0, available: 0 });
+    expect(planDay(input({ budgets: {}, openWork: { personal: 60 } }))[0]).toMatchObject({ openMinutes: 0, available: 0 });
+  });
+
   it("always lists tasks picked for today and due today, flagged when over budget", () => {
     const picked = task({ firstOn: today, size: "L" });
     const dueToday = task({ deadline: today, size: "L" });

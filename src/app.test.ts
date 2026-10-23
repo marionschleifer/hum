@@ -301,6 +301,13 @@ describe("calendar and planning", () => {
     expect((await as("GET", "/api/today?today=2026-10-17&tz=UTC")).body.warnings).toEqual([]);
   });
 
+  it("plans with open work", async () => {
+    const { as } = await loggedIn();
+    const view = (await as("POST", "/api/plan", { today: "2026-10-17", energy: "normal", budgets: { accounto: 120 }, openWork: { accounto: 45 } })).body;
+    expect(view.plan.openWork).toEqual({ accounto: 45 });
+    expect(view.plan.themes.find((t: { themeId: string }) => t.themeId === "accounto")).toMatchObject({ openMinutes: 45, available: 75 });
+  });
+
   it("parses a spoken morning note", async () => {
     const { as } = await loggedIn({ parseBudgets: async () => ({ budgets: [{ theme: "hvnly", minutes: 90 }] }) });
     expect((await as("POST", "/api/plan/parse", { text: "hvnly an hour and a half" })).body).toEqual({ budgets: { hvnly: 90 } });
