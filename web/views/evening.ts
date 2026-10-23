@@ -1,6 +1,7 @@
-import { eveningApi, type Answer, type EveningItem, type Suggestion, type WrapUpResult } from "../api.ts";
+import { eveningApi, type Answer, type EveningItem, type EveningView, type Suggestion, type WrapUpResult } from "../api.ts";
 import { recordButton } from "../components/recorder.ts";
 import { suggestionCards } from "../components/suggestions.ts";
+import { timeSpentBlock } from "../components/time-spent.ts";
 import { taskList, taskRow } from "../components/task-row.ts";
 import { formatMinutes, h, mount, toast, today } from "../dom.ts";
 import { refresh, themeById } from "../state.ts";
@@ -16,6 +17,7 @@ const REASONS: { reason: Reason; label: string }[] = [
 
 const drafts = new Map<string, Map<string, { reason?: Reason; note: string }>>();
 const results = new Map<string, WrapUpResult>();
+const timeDrafts = new Map<string, Record<string, number>>();
 
 export async function renderEvening(root: HTMLElement, date: string | undefined, thenMorning: boolean): Promise<void> {
   const day = date ?? today();
@@ -28,6 +30,7 @@ export async function renderEvening(root: HTMLElement, date: string | undefined,
     mount(
       root,
       header(title, view.wrappedUpAt ? "This day is wrapped up." : "There was no plan for this day."),
+      view.hasPlan ? recordedTime(day, view) : undefined,
       view.doneUnplanned.length || view.items.some((i) => i.doneToday)
         ? [h("h2", {}, "Done"), taskList([...view.items.filter((i) => i.doneToday).map((i) => i.task), ...view.doneUnplanned])]
         : undefined,
@@ -38,6 +41,8 @@ export async function renderEvening(root: HTMLElement, date: string | undefined,
   }
   const answers = drafts.get(day) ?? new Map();
   drafts.set(day, answers);
+  const time = timeDrafts.get(day) ?? {};
+  timeDrafts.set(day, time);
   const done = view.items.filter((item) => item.doneToday);
   const open = view.items.filter((item) => !item.doneToday && item.task.status === "open");
   const finish = h("button", { type: "button", class: "btn primary" }, "Finish the day");
@@ -50,8 +55,9 @@ export async function renderEvening(root: HTMLElement, date: string | undefined,
         const note = answer?.note.trim() || undefined;
         return { taskId: item.task.id, reason: answer?.reason ?? "other", note } satisfies Answer;
       });
-      results.set(day, await eveningApi.wrapUp(day, payload));
+      results.set(day, await eveningApi.wrapUp(day, payload, time));
       drafts.delete(day);
+      timeDrafts.delete(day);
       await refresh();
     } catch (error) {
       toast((error as Error).message, "error");
@@ -61,7 +67,10 @@ export async function renderEvening(root: HTMLElement, date: string | undefined,
   });
   mount(
     root,
-    header(title, open.length ? "Tick off what you did. For the rest, a quick why." : "Tick off what you did."),
+    header(title, open.length ? "How long did each theme take? Then tick off what you did, and for the rest, a quick why." : "How long did each theme take? Then tick off what you did."),
+    h("h2", {}, "Time spent"),
+    h("p", { class: "muted", style: "margin:-4px 0 8px;font-size:13px" }, "All the time for each theme, meetings and work outside your todos included."),
+    timeSpentBlock(view.time, time),
     h("h2", {}, "Planned"),
     h(
       "div",
@@ -70,6 +79,27 @@ export async function renderEvening(root: HTMLElement, date: string | undefined,
     ),
     view.doneUnplanned.length ? [h("h2", {}, "Also done"), taskList(view.doneUnplanned)] : undefined,
     h("div", { class: "row", style: "justify-content:flex-end;margin-top:20px" }, finish),
+  );
+}
+
+function recordedTime(day: string, view: EveningView): HTMLElement {
+  const values: Record<string, number> = {};
+  const save = h("button", { type: "button", class: "btn small" }, view.time.spent ? "Save changes" : "Save");
+  save.addEventListener("click", async () => {
+    try {
+      await eveningApi.saveTime(day, values);
+      toast("Time saved");
+    } catch (error) {
+      toast((error as Error).message, "error");
+    }
+  });
+  return h(
+    "section",
+    {},
+    h("h2", {}, "Time spent"),
+    view.time.spent ? undefined : h("p", { class: "muted", style: "margin:-4px 0 8px;font-size:13px" }, "Not recorded yet. These are the budgets; adjust and save."),
+    timeSpentBlock(view.time, values),
+    h("div", { class: "row", style: "justify-content:flex-end;margin-top:8px" }, save),
   );
 }
 

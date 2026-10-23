@@ -10,12 +10,14 @@ import { renderMorning } from "./views/morning.ts";
 import { renderSettings } from "./views/settings.ts";
 import { renderTheme, renderThemes } from "./views/themes.ts";
 import { renderToday } from "./views/today.ts";
+import { renderWeek } from "./views/week.ts";
 
 const root = document.getElementById("app")!;
 const tabs = [
   { hash: "#/today", label: "Today" },
   { hash: "#/inbox", label: "Inbox" },
   { hash: "#/themes", label: "Themes" },
+  { hash: "#/week", label: "Week" },
   { hash: "#/settings", label: "Settings" },
 ];
 
@@ -50,6 +52,7 @@ async function renderRoute(main: HTMLElement): Promise<void> {
     else if (page === "theme" && id) await renderTheme(main, id);
     else if (page === "settings") await renderSettings(main);
     else if (page === "archive") await renderArchive(main);
+    else if (page === "week") await renderWeek(main, id);
     else if (page === "morning") await renderMorning(main, id);
     else if (page === "evening") await renderEvening(main, id, location.hash.includes("then=morning"));
     else await renderToday(main);
@@ -64,9 +67,11 @@ function renderTabs(nav: HTMLElement): void {
     ? "#/themes"
     : hash.startsWith("#/archive")
       ? "#/settings"
-      : hash.startsWith("#/morning") || hash.startsWith("#/evening")
-        ? "#/today"
-        : hash;
+      : hash.startsWith("#/week")
+        ? "#/week"
+        : hash.startsWith("#/morning") || hash.startsWith("#/evening")
+          ? "#/today"
+          : hash;
   mount(
     nav,
     tabs.map((tab) =>

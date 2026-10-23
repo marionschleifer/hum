@@ -63,19 +63,37 @@ async function renderBudgetStep(root: HTMLElement, replan: boolean): Promise<voi
       store.themes.map((theme) => {
         const minutes = draft.budgets[theme.id] ?? 0;
         const meetings = view.meetings.filter((e) => e.themeId === theme.id && e.blocking).reduce((sum, e) => sum + e.minutes, 0);
+        const open = Math.min(minutes, draft.openWork[theme.id] ?? 0);
         const change = (delta: number) => {
           draft.budgets[theme.id] = Math.max(0, minutes + delta);
+          draft.openWork[theme.id] = Math.min(draft.budgets[theme.id]!, open);
           renderRows();
         };
-        return h(
-          "div",
-          { class: "task budget-row", style: "cursor:default;align-items:center" },
-          h("span", { class: "dot", style: `background:${theme.color}` }),
-          h("div", { class: "body" }, theme.name, meetings ? h("div", { class: "meta" }, `${formatMinutes(meetings)} of meetings`) : undefined),
-          h("button", { type: "button", class: "icon-btn", "aria-label": `Less time for ${theme.name}`, onclick: () => change(-STEP_MINUTES) }, "−"),
-          h("span", { class: "budget-value" }, minutes ? formatMinutes(minutes) : "0"),
-          h("button", { type: "button", class: "icon-btn", "aria-label": `More time for ${theme.name}`, onclick: () => change(STEP_MINUTES) }, "+"),
-        );
+        const changeOpen = (delta: number) => {
+          draft.openWork[theme.id] = Math.min(minutes, Math.max(0, open + delta));
+          renderRows();
+        };
+        return [
+          h(
+            "div",
+            { class: "task budget-row", style: "cursor:default;align-items:center" },
+            h("span", { class: "dot", style: `background:${theme.color}` }),
+            h("div", { class: "body" }, theme.name, meetings ? h("div", { class: "meta" }, `${formatMinutes(meetings)} of meetings`) : undefined),
+            h("button", { type: "button", class: "icon-btn", "aria-label": `Less time for ${theme.name}`, onclick: () => change(-STEP_MINUTES) }, "−"),
+            h("span", { class: "budget-value" }, minutes ? formatMinutes(minutes) : "0"),
+            h("button", { type: "button", class: "icon-btn", "aria-label": `More time for ${theme.name}`, onclick: () => change(STEP_MINUTES) }, "+"),
+          ),
+          minutes
+            ? h(
+                "div",
+                { class: "task budget-row open-row", style: "cursor:default;align-items:center" },
+                h("div", { class: "body meta" }, "of that, open work (email, admin)"),
+                h("button", { type: "button", class: "icon-btn", "aria-label": `Less open work for ${theme.name}`, onclick: () => changeOpen(-STEP_MINUTES) }, "−"),
+                h("span", { class: "budget-value" }, open ? formatMinutes(open) : "0"),
+                h("button", { type: "button", class: "icon-btn", "aria-label": `More open work for ${theme.name}`, onclick: () => changeOpen(STEP_MINUTES) }, "+"),
+              )
+            : undefined,
+        ];
       }),
     );
 
@@ -119,6 +137,7 @@ async function renderBudgetStep(root: HTMLElement, replan: boolean): Promise<voi
     try {
       const parsed = await planApi.parse(said.value);
       Object.assign(draft.budgets, parsed.budgets);
+      Object.assign(draft.openWork, parsed.openWork ?? {});
       if (parsed.energy) draft.energy = parsed.energy as Energy;
       if (parsed.note) note.value = [note.value, parsed.note].filter(Boolean).join("\n");
       renderRows();
@@ -133,7 +152,10 @@ async function renderBudgetStep(root: HTMLElement, replan: boolean): Promise<voi
     button.disabled = true;
     button.textContent = "Planning...";
     try {
-      await planApi.make({ energy: draft.energy, energyNote: note.value, budgets: draft.budgets });
+      const openWork = Object.fromEntries(
+        Object.entries(draft.openWork).map(([themeId, minutes]) => [themeId, Math.min(minutes, draft.budgets[themeId] ?? 0)]),
+      );
+      await planApi.make({ energy: draft.energy, energyNote: note.value, budgets: draft.budgets, openWork });
       location.hash = "#/today";
     } catch (error) {
       toast((error as Error).message, "error");
@@ -164,14 +186,18 @@ async function renderBudgetStep(root: HTMLElement, replan: boolean): Promise<voi
   );
 }
 
-function initialDraft(view: TodayView, replan: boolean): { budgets: Record<string, number>; energy: Energy; note: string } {
-  if (!replan || !view.plan) return { budgets: {}, energy: "normal", note: "" };
+type Draft = { budgets: Record<string, number>; openWork: Record<string, number>; energy: Energy; note: string };
+
+function initialDraft(view: TodayView, replan: boolean): Draft {
+  if (!replan || !view.plan) return { budgets: {}, openWork: {}, energy: "normal", note: "" };
   const budgets: Record<string, number> = {};
+  const openWork: Record<string, number> = {};
   for (const theme of view.plan.themes) {
     const done = theme.items.filter((item) => item.doneToday).reduce((sum, item) => sum + item.minutes, 0);
     budgets[theme.themeId] = Math.max(0, theme.budget - done);
+    if (theme.openMinutes) openWork[theme.themeId] = Math.min(budgets[theme.themeId]!, theme.openMinutes);
   }
-  return { budgets, energy: view.plan.energy, note: view.plan.energyNote ?? "" };
+  return { budgets, openWork, energy: view.plan.energy, note: view.plan.energyNote ?? "" };
 }
 
 function stepHeader(step: number | undefined, title: string, hint: string): HTMLElement {

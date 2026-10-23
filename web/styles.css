@@ -658,3 +658,20 @@ button.strip-day.today {
   color: var(--muted);
   font-size: 0.9em;
 }
+
+.budget-row.open-row {
+  padding-left: 28px;
+  font-size: 14px;
+}
+
+.budget-row.open-row .icon-btn {
+  font-size: 16px;
+}
+
+.week-day {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  font-variant-numeric: tabular-nums;
+}

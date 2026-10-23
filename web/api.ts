@@ -8,9 +8,11 @@ import type { Project } from "../src/projects/projects.ts";
 import type { Task } from "../src/tasks/tasks.ts";
 import type { Theme } from "../src/themes/themes.ts";
 import type { TemplateEntry, TrainingSession, TrainingWeek } from "../src/training/training.ts";
+import type { WeekSummary } from "../src/timespent/timespent.ts";
 import { today } from "./dom.ts";
 
 export type { Answer, EveningItem, EveningView, Learning, Suggestion, TemplateEntry, TrainingSession, TrainingWeek, WrapUpResult };
+export type { WeekSummary };
 export type TrainingTemplate = { template: TemplateEntry[]; tenK: TemplateEntry[] };
 export type { CalendarEvent, DayPlanView, Project, Task, Theme, ThemePlanView, TodayView };
 export type CaptureResponse = CaptureResult & { message: string };
@@ -59,14 +61,14 @@ export const planApi = {
       "GET",
       `/api/today?${new URLSearchParams({ today: today(), tz: Intl.DateTimeFormat().resolvedOptions().timeZone })}`,
     ),
-  make: (input: { energy: string; energyNote?: string; budgets: Record<string, number> }) =>
+  make: (input: { energy: string; energyNote?: string; budgets: Record<string, number>; openWork?: Record<string, number> }) =>
     api<TodayView>("POST", "/api/plan", {
       ...input,
       today: today(),
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     }),
   parse: (text: string) =>
-    api<{ budgets: Record<string, number>; energy?: string; note?: string }>("POST", "/api/plan/parse", { text }),
+    api<{ budgets: Record<string, number>; openWork?: Record<string, number>; energy?: string; note?: string }>("POST", "/api/plan/parse", { text }),
   tagTitle: (title: string, themeId: string) => api("POST", "/api/calendar/rules", { title, themeId }),
   hideEvent: (event: Pick<CalendarEvent, "id" | "title" | "start">) =>
     api("POST", "/api/calendar/hidden", { id: event.id, title: event.title, start: event.start }),
@@ -78,7 +80,12 @@ export const planApi = {
 export const eveningApi = {
   view: (date: string) => api<EveningView>("GET", `/api/evening?date=${date}`),
   pending: () => api<{ date?: string }>("GET", `/api/evening/pending?today=${today()}`),
-  wrapUp: (date: string, answers: Answer[]) => api<WrapUpResult>("POST", "/api/evening", { date, answers }),
+  wrapUp: (date: string, answers: Answer[], timeSpent?: Record<string, number>) =>
+    api<WrapUpResult>("POST", "/api/evening", { date, answers, timeSpent }),
+  saveTime: (date: string, timeSpent: Record<string, number>) =>
+    api<{ timeSpent: Record<string, number> }>("PUT", "/api/evening/time", { date, timeSpent }),
+  parseTime: (text: string) => api<{ timeSpent: Record<string, number> }>("POST", "/api/evening/time/parse", { text }),
+  week: (date: string) => api<WeekSummary>("GET", `/api/week?date=${date}`),
   suggestions: () => api<Suggestion[]>("GET", "/api/suggestions"),
   apply: (id: string) => api<Task>("POST", `/api/suggestions/${id}/apply`, { today: today() }),
   dismiss: (id: string) => api("POST", `/api/suggestions/${id}/dismiss`),

@@ -60,6 +60,7 @@ function themeCard(plan: ThemePlanView, view: TodayView): HTMLElement {
     `${formatMinutes(plan.budget)} budget`,
     plan.meetingMinutes ? `${formatMinutes(plan.meetingMinutes)} meetings` : undefined,
     plan.trainingMinutes ? `${formatMinutes(plan.trainingMinutes)} training` : undefined,
+    plan.openMinutes ? `${formatMinutes(plan.openMinutes)} open work` : undefined,
     `${formatMinutes(used)} of ${formatMinutes(plan.available)} for tasks`,
   ].filter(Boolean);
   return h(
@@ -72,6 +73,9 @@ function themeCard(plan: ThemePlanView, view: TodayView): HTMLElement {
       { class: "card" },
       meetingRows(meetings),
       sessionRows(training),
+      plan.openMinutes
+        ? h("div", { class: "task", style: "cursor:default" }, h("div", { class: "body" }, "Open work", h("div", { class: "meta" }, `${formatMinutes(plan.openMinutes)} for email and other work that isn't a todo`)))
+        : undefined,
       plan.items.map((item) =>
         taskRow(item.task, {
           done: item.doneToday,
@@ -85,7 +89,7 @@ function themeCard(plan: ThemePlanView, view: TodayView): HTMLElement {
           ),
         }),
       ),
-      plan.items.length === 0 && meetings.length === 0 && training.length === 0 && !plan.tooBig
+      plan.items.length === 0 && meetings.length === 0 && training.length === 0 && !plan.openMinutes && !plan.tooBig
         ? h("div", { class: "empty" }, "Nothing planned here.")
         : undefined,
       plan.tooBig
