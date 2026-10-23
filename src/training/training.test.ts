@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { freshTestCtx, testCtx } from "../../test/helpers.ts";
 import {
+  addSession,
   moveSession,
   sessionMinutes,
   sessionsOn,
@@ -176,6 +177,49 @@ describe("rules", () => {
     const { sessions } = week(ctx);
     updateSession(ctx, sessions.find((s) => s.date === "2026-10-23")!.id, { status: "sick" });
     expect(trainingWeek(ctx, monday, "2026-10-23").sessions.find((s) => s.kind === "tempo")?.status).toBe("sick");
+  });
+});
+
+describe("changing a session's kind", () => {
+  it("turns a long run into an easy run with the template's easy minutes", () => {
+    const ctx = testCtx();
+    const long = week(ctx).sessions.find((s) => s.kind === "long")!;
+    expect(updateSession(ctx, long.id, { kind: "easy" })).toMatchObject({ kind: "easy", title: "Easy run", minMinutes: 40, maxMinutes: 50 });
+  });
+
+  it("makes an extra rest day, which counts no minutes and clears travel", () => {
+    const ctx = testCtx();
+    const strength = week(ctx).sessions[0]!;
+    updateSession(ctx, strength.id, { travel: true });
+    const rest = updateSession(ctx, strength.id, { kind: "rest" });
+    expect(rest).toMatchObject({ kind: "rest", title: "Rest", travel: false, minMinutes: undefined, maxMinutes: undefined });
+    expect(sessionMinutes(rest)).toBe(0);
+    expect(layout(week(ctx).sessions)).toContain("19 Rest");
+  });
+
+  it("falls back to the 10k minutes for a kind the template does not have, and rejects unknown kinds", () => {
+    const ctx = freshTestCtx();
+    setTrainingTemplate(ctx, [{ day: 0, kind: "strength", minMinutes: 45 }]);
+    const strength = week(ctx).sessions[0]!;
+    expect(updateSession(ctx, strength.id, { kind: "long" })).toMatchObject({ minMinutes: 75, maxMinutes: 100 });
+    expect(() => updateSession(ctx, strength.id, { kind: "yoga" as never })).toThrow("Invalid session");
+  });
+});
+
+describe("addSession", () => {
+  it("adds a session to a day with nothing planned", () => {
+    const ctx = freshTestCtx();
+    setTrainingTemplate(ctx, [{ day: 0, kind: "strength", minMinutes: 45 }]);
+    week(ctx);
+    const added = addSession(ctx, "2026-10-22", "tempo");
+    expect(added).toMatchObject({ date: "2026-10-22", kind: "tempo", status: "planned", minMinutes: 30, maxMinutes: 30 });
+    expect(layout(week(ctx).sessions)).toEqual(["19 Strength", "22 Tempo run"]);
+  });
+
+  it("only adds to an empty day, and fills the week first", () => {
+    const ctx = testCtx();
+    expect(() => addSession(ctx, "2026-10-20", "easy")).toThrow("already has a session");
+    expect(() => addSession(ctx, "2026-10-20", "yoga" as never)).toThrow("Invalid session");
   });
 });
 

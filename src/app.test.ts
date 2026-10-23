@@ -380,6 +380,17 @@ describe("training", () => {
     expect((await as("POST", `/api/training/sessions/${intervals.id}/move`, {})).status).toBe(400);
   });
 
+  it("changes a session's kind and adds one to an empty day", async () => {
+    const { as } = await loggedIn();
+    const week = (await as("GET", "/api/training/week?date=2026-10-19&today=2026-10-19")).body;
+    const long = week.sessions.find((s: { kind: string }) => s.kind === "long");
+    expect((await as("PATCH", `/api/training/sessions/${long.id}`, { kind: "easy" })).body).toMatchObject({ kind: "easy", minMinutes: 40 });
+    const saturday = week.sessions.find((s: { kind: string }) => s.kind === "rest");
+    await as("PATCH", `/api/training/sessions/${saturday.id}`, { kind: "strength" });
+    expect((await as("POST", "/api/training/sessions", { date: "2026-10-19", kind: "easy" })).status).toBe(409);
+    expect((await as("POST", "/api/training/sessions", { kind: "easy" })).status).toBe(400);
+  });
+
   it("reads and replaces the template, and offers the 10k week", async () => {
     const { as, call } = await loggedIn();
     const current = (await as("GET", "/api/training/template")).body;

@@ -96,20 +96,47 @@ export function moveSession(ctx: Ctx, id: string, date: string): TrainingSession
   return weekSessions(ctx, monday);
 }
 
+export function addSession(ctx: Ctx, date: string, kind: SessionKind): TrainingSession {
+  checkDate(date);
+  if (!sessionKinds.includes(kind)) fail(400, "Invalid session");
+  const monday = startOfWeek(date);
+  ensureWeek(ctx, monday);
+  if (ctx.db.query("SELECT 1 FROM training_sessions WHERE date = ?").get(date)) fail(409, "That day already has a session");
+  const now = isoNow(ctx);
+  const id = ctx.newId();
+  const minutes = minutesFor(ctx, kind);
+  ctx.db
+    .query(
+      `INSERT INTO training_sessions (id, week_start, date, kind, min_minutes, max_minutes, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(id, monday, date, kind, minutes.minMinutes ?? null, minutes.maxMinutes ?? null, now, now);
+  return getSession(ctx, id);
+}
+
 export function updateSession(
   ctx: Ctx,
   id: string,
-  patch: { status?: SessionStatus; travel?: boolean; note?: string },
+  patch: { status?: SessionStatus; travel?: boolean; note?: string; kind?: SessionKind },
 ): TrainingSession {
   const session = getSession(ctx, id);
   if (patch.status !== undefined && !sessionStatuses.includes(patch.status)) fail(400, "Invalid status");
+  if (patch.kind !== undefined && !sessionKinds.includes(patch.kind)) fail(400, "Invalid session");
   const now = isoNow(ctx);
+  const kindChanges = patch.kind !== undefined && patch.kind !== session.kind;
+  const travel = kindChanges ? false : (patch.travel ?? session.travel);
   ctx.db.transaction(() => {
+    if (kindChanges) {
+      const minutes = minutesFor(ctx, patch.kind!);
+      ctx.db
+        .query("UPDATE training_sessions SET kind = ?, min_minutes = ?, max_minutes = ?, updated_at = ? WHERE id = ?")
+        .run(patch.kind!, minutes.minMinutes ?? null, minutes.maxMinutes ?? null, now, id);
+    }
     ctx.db
       .query("UPDATE training_sessions SET status = ?, travel = ?, note = ?, updated_at = ? WHERE id = ?")
       .run(
         patch.status ?? session.status,
-        (patch.travel ?? session.travel) ? 1 : 0,
+        travel ? 1 : 0,
         (patch.note === undefined ? session.note : patch.note.trim() || undefined) ?? null,
         now,
         id,
@@ -154,6 +181,12 @@ export function weekWarnings(sessions: TrainingSession[], today: string): Traini
   const fit = fitWarning(sessions, active, days, today);
   if (fit) warnings.push(fit);
   return warnings;
+}
+
+function minutesFor(ctx: Ctx, kind: SessionKind): { minMinutes?: number; maxMinutes?: number } {
+  if (kind === "rest") return {};
+  const entry = trainingTemplate(ctx).find((e) => e.kind === kind) ?? TEN_K_WEEK.find((e) => e.kind === kind);
+  return { minMinutes: entry?.minMinutes, maxMinutes: entry?.maxMinutes };
 }
 
 function checkEntry(entry: TemplateEntry): TemplateEntry {

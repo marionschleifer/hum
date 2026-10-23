@@ -64,12 +64,14 @@ import {
   type TaskStatus,
 } from "./tasks/tasks.ts";
 import {
+  addSession,
   moveSession,
   setTrainingTemplate,
   TEN_K_WEEK,
   trainingTemplate,
   trainingWeek,
   updateSession,
+  type SessionKind,
   type SessionStatus,
   type TemplateEntry,
 } from "./training/training.ts";
@@ -430,8 +432,13 @@ function trainingRoutes(deps: AppDeps): Route[] {
       return json(trainingWeek(ctx, sessions[0]!.date, todayOr(ctx, body.today)));
     }),
     guard("PATCH", "/api/training/sessions/:id", async (request, { id }) => {
-      const body = await readJson<{ status?: SessionStatus; travel?: boolean; note?: string }>(request);
+      const body = await readJson<{ status?: SessionStatus; travel?: boolean; note?: string; kind?: SessionKind }>(request);
       return json(updateSession(ctx, id!, body));
+    }),
+    guard("POST", "/api/training/sessions", async (request) => {
+      const body = await readJson<{ date?: string; kind?: SessionKind }>(request);
+      if (!body.date) fail(400, "Which day?");
+      return json(addSession(ctx, body.date, body.kind ?? fail(400, "Which session?")), 201);
     }),
     guard("GET", "/api/training/template", () => json({ template: trainingTemplate(ctx), tenK: TEN_K_WEEK })),
     guard("PUT", "/api/training/template", async (request) => {
