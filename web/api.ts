@@ -103,8 +103,9 @@ export const eveningApi = {
 export const trainingApi = {
   week: (date: string) => api<TrainingWeek>("GET", `/api/training/week?date=${date}&today=${today()}`),
   move: (id: string, date: string) => api<TrainingWeek>("POST", `/api/training/sessions/${id}/move`, { date, today: today() }),
-  update: (id: string, patch: { status?: TrainingSession["status"]; travel?: boolean; note?: string }) =>
+  update: (id: string, patch: { status?: TrainingSession["status"]; travel?: boolean; note?: string; kind?: TrainingSession["kind"] }) =>
     api<TrainingSession>("PATCH", `/api/training/sessions/${id}`, patch),
+  add: (date: string, kind: TrainingSession["kind"]) => api<TrainingSession>("POST", "/api/training/sessions", { date, kind }),
   template: () => api<TrainingTemplate>("GET", "/api/training/template"),
   saveTemplate: (template: TemplateEntry[]) => api<TrainingTemplate>("PUT", "/api/training/template", { template }),
 };

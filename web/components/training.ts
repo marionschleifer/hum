@@ -10,6 +10,15 @@ const STATUS_LABELS: Record<TrainingSession["status"], string> = {
   sick: "Sick",
 };
 
+const KIND_LABELS: Record<TrainingSession["kind"], string> = {
+  strength: "Strength",
+  intervals: "Intervals",
+  easy: "Easy run",
+  tempo: "Tempo run",
+  long: "Long run",
+  rest: "Rest day",
+};
+
 export function trainingSection(week: TrainingWeek): HTMLElement | undefined {
   if (week.sessions.length === 0) return undefined;
   const container = h("section");
@@ -128,7 +137,12 @@ function openTrainingDay(day: string, weekSessions: TrainingSession[]): void {
       "div",
       { class: "sheet-body", style: "display:grid;gap:16px" },
       h("h2", { style: "margin:0;text-transform:none;font-size:20px;color:var(--text);letter-spacing:0" }, label),
-      sessions.length === 0 ? h("p", { class: "muted" }, "Nothing planned this day.") : undefined,
+      sessions.length === 0
+        ? [
+            h("p", { class: "muted", style: "margin:0" }, "Nothing planned this day."),
+            kindChips("Add", (kind) => act(() => trainingApi.add(day, kind), "Added")),
+          ]
+        : undefined,
       sessions.map((session) =>
         h(
           "div",
@@ -163,11 +177,16 @@ function openTrainingDay(day: string, weekSessions: TrainingSession[]): void {
                 h("span", {}, "Travelling: bodyweight or hotel strength"),
               )
             : undefined,
+          kindChips(
+            "Change to",
+            (kind) => act(() => trainingApi.update(session.id, { kind }), kind === "rest" ? "Now a rest day" : `Now ${KIND_LABELS[kind].toLowerCase()}`),
+            session.kind,
+          ),
           session.status === "planned"
             ? h(
                 "div",
                 { style: "display:grid;gap:6px" },
-                h("span", { class: "muted", style: "font-size:13px" }, "Move to"),
+                h("span", { class: "muted", style: "font-size:13px" }, "Swap with"),
                 h(
                   "div",
                   { class: "row" },
@@ -188,6 +207,25 @@ function openTrainingDay(day: string, weekSessions: TrainingSession[]): void {
       h("button", { type: "button", class: "btn", onclick: close }, "Close"),
     );
   });
+}
+
+function kindChips(
+  label: string,
+  onPick: (kind: TrainingSession["kind"]) => () => Promise<void>,
+  current?: TrainingSession["kind"],
+): HTMLElement {
+  return h(
+    "div",
+    { style: "display:grid;gap:6px" },
+    h("span", { class: "muted", style: "font-size:13px" }, label),
+    h(
+      "div",
+      { class: "row" },
+      (Object.keys(KIND_LABELS) as TrainingSession["kind"][])
+        .filter((kind) => kind !== current)
+        .map((kind) => h("button", { type: "button", class: "chip", onclick: onPick(kind) }, KIND_LABELS[kind])),
+    ),
+  );
 }
 
 async function change(action: () => Promise<unknown>, message: string): Promise<void> {

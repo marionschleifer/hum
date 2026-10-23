@@ -98,7 +98,7 @@ Each new week starts from the template set under Settings, Training week. A new 
 | Saturday | Rest |
 | Sunday | Long run, 75 to 100 min |
 
-She can move sessions within the week (moving swaps with whatever is on that day), and mark each one done, skipped or sick. Sick marks the whole day.
+She can move sessions within the week (moving swaps with whatever is on that day), and mark each one done, skipped or sick. Sick marks the whole day. She can also change a session into another kind, for example a long run into an easy run, or into an extra rest day, and add a session to a day with nothing planned (added 2026-10-23). A changed or added session takes that kind's minutes from her template, or from the 10k week when the template has no such session.
 
 Rules Hum checks after changes (warnings only, she decides):
 
