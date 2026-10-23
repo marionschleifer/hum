@@ -51,9 +51,11 @@ This is the main ritual. There are no templates and no default hours, ever. Ever
    - High, Normal or Lower,
    - a small, hidden Sick button,
    - optional free text.
+   - Optionally, per theme, how much of the budget is open work: email, admin and anything else that is not a todo (added 2026-10-23). "6 hours Accounto, 2 of that for email" works by voice or text too.
 4. **AI fills the budgets.** The AI loads the most important tasks per theme into each budget and fits in training.
    - The output is a list per theme, not a timed schedule.
    - Meetings count against their theme's budget.
+   - Open work is kept free: todos only fill what is left after meetings, training and open work. Deadline warnings use the same smaller pace.
 5. **Warnings and training.** Deadline-at-risk warnings (warn only, never auto-reserve time; snoozed tasks are left out while snoozed) and a weekly training strip.
    - Each warning offers actions Marion taps herself (added 2026-10-17): schedule for tomorrow (with a fit check against the theme's usual time and a "no buffer" note when tomorrow is the deadline), give it 15 or 30 minutes today from another theme or free time, do a smaller version (a 15 minute first step for today), move the deadline (soft deadlines only; tasks can be flagged as having a fixed deadline), and let it go (recorded, and the warning stops for that deadline).
    - On a sick day the box offers "Move everything at risk to when I'm better": a preview where each task lands on the day before its deadline, never earlier than tomorrow. Nothing changes until she accepts.
@@ -64,6 +66,7 @@ If no morning plan was made, Hum shows only tasks picked for today, essentials, 
 
 ## Evening ritual
 
+- **Time spent** (added 2026-10-23): first, one row per theme, prefilled with that day's budget. Marion changes only what was different, with buttons, text or voice. It is all the time for the theme that day, meetings and open work included. She can change it later on that day's evening page. A day she never records stays "not recorded", never "spent as budgeted".
 - Marion ticks off the tasks she finished.
 - For each undone task, Hum asks why. Quick reasons:
   - no time
@@ -74,7 +77,8 @@ If no morning plan was made, Hum shows only tasks picked for today, essentials, 
 - After 3 postponements of the same task, the AI suggests one of: do first tomorrow, break down, reschedule, or drop. It always gives a reason.
 - Dropped tasks go to an archive. They are never deleted.
 - A skipped evening rolls into the next morning.
-- **Learnings** are stored as plain-language notes. Marion can read, edit and delete them. Learnings only adjust suggestions; they never act on their own.
+- The **Week** page compares budget and time spent per theme, per day and for the week. Days without a record are shown as such and left out of the comparison.
+- **Learnings** are stored as plain-language notes. Marion can read, edit and delete them. Learnings only adjust suggestions; they never act on their own. Besides postponements, the AI looks at the last two weeks of budget against time spent (for example "Accounto runs about an hour over its budget"). It never sets or prefills budgets.
 
 ## Training
 
