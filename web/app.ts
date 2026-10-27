@@ -8,7 +8,7 @@ import { renderInbox } from "./views/inbox.ts";
 import { renderLogin } from "./views/login.ts";
 import { renderMorning } from "./views/morning.ts";
 import { renderSettings } from "./views/settings.ts";
-import { renderTheme, renderThemes } from "./views/themes.ts";
+import { renderTasks, renderTheme } from "./views/themes.ts";
 import { renderToday } from "./views/today.ts";
 import { renderWeek } from "./views/week.ts";
 
@@ -16,7 +16,7 @@ const root = document.getElementById("app")!;
 const tabs = [
   { hash: "#/today", label: "Today" },
   { hash: "#/inbox", label: "Inbox" },
-  { hash: "#/themes", label: "Themes" },
+  { hash: "#/tasks", label: "Tasks" },
   { hash: "#/week", label: "Week" },
   { hash: "#/settings", label: "Settings" },
 ];
@@ -48,7 +48,7 @@ async function renderRoute(main: HTMLElement): Promise<void> {
   const [, page, id] = location.hash.split("?")[0]!.split("/");
   try {
     if (page === "inbox") await renderInbox(main);
-    else if (page === "themes") await renderThemes(main);
+    else if (page === "tasks" || page === "themes") await renderTasks(main);
     else if (page === "theme" && id) await renderTheme(main, id);
     else if (page === "settings") await renderSettings(main);
     else if (page === "archive") await renderArchive(main);
@@ -63,8 +63,8 @@ async function renderRoute(main: HTMLElement): Promise<void> {
 
 function renderTabs(nav: HTMLElement): void {
   const hash = location.hash.split("?")[0]!;
-  const current = hash.startsWith("#/theme")
-    ? "#/themes"
+  const current = hash.startsWith("#/theme") || hash.startsWith("#/tasks")
+    ? "#/tasks"
     : hash.startsWith("#/archive")
       ? "#/settings"
       : hash.startsWith("#/week")

@@ -23,6 +23,7 @@ Todoist forces every task onto a date. Marion's weeks never repeat: a job, trave
 
 - Themes (editable). A new install starts with Work, Personal and Exercise. Marion's install has Accounto, Code Blossom, hvnly, Personal and Exercise.
 - Hierarchy: Theme, then an optional Project, then Task, then one level of subtasks.
+- The Tasks tab lists open tasks by theme or by date (added 2026-10-25): by date groups them by deadline into Overdue, Today, Tomorrow, Next 7 days, Later and No deadline.
 - Recurring tasks behave like normal tasks.
   - Default recurrence is "N times per week" or "N times per month", on any day.
   - Fixed days only when Marion asks for them.

@@ -1,27 +1,73 @@
-import { api, eveningApi, tasksApi, type Project } from "../api.ts";
+import { groupByDate } from "../../src/tasks/by-date.ts";
+import { api, eveningApi, tasksApi, type Project, type Task } from "../api.ts";
 import { taskList } from "../components/task-row.ts";
 import { h, mount, toast, today } from "../dom.ts";
 import { refresh, store, themeById } from "../state.ts";
 
-export async function renderThemes(root: HTMLElement): Promise<void> {
-  const open = await tasksApi.list({ status: "open" });
+type TasksView = "theme" | "date";
+
+const VIEW_KEY = "hum.tasks-view";
+
+export async function renderTasks(root: HTMLElement): Promise<void> {
+  const view = savedView();
+  const [open, day] = await Promise.all([tasksApi.list({ status: "open" }), view === "date" ? eveningApi.view(today()) : undefined]);
+  const switchTo = (next: TasksView) => () => {
+    saveView(next);
+    void renderTasks(root);
+  };
   mount(
     root,
-    h("header", { class: "page" }, h("h1", {}, "Themes")),
+    h("header", { class: "page" }, h("h1", {}, "Tasks")),
     h(
       "div",
-      { class: "card theme-list" },
-      store.themes.map((theme) =>
-        h(
-          "a",
-          { href: `#/theme/${theme.id}` },
-          h("span", { class: "dot", style: `background:${theme.color}` }),
-          theme.name,
-          h("span", { class: "count" }, String(open.filter((t) => t.themeId === theme.id && !t.parentId).length)),
-        ),
+      { class: "segmented", role: "group", "aria-label": "Sort tasks", style: "margin-bottom:12px" },
+      h("button", { type: "button", "aria-pressed": view === "theme" ? "true" : "false", onclick: switchTo("theme") }, "By theme"),
+      h("button", { type: "button", "aria-pressed": view === "date" ? "true" : "false", onclick: switchTo("date") }, "By date"),
+    ),
+    view === "theme" ? byTheme(open) : byDate(open, new Set(day?.items.map((item) => item.task.id))),
+  );
+}
+
+function byTheme(open: Task[]): HTMLElement {
+  return h(
+    "div",
+    { class: "card theme-list" },
+    store.themes.map((theme) =>
+      h(
+        "a",
+        { href: `#/theme/${theme.id}` },
+        h("span", { class: "dot", style: `background:${theme.color}` }),
+        theme.name,
+        h("span", { class: "count" }, String(open.filter((t) => t.themeId === theme.id && !t.parentId).length)),
       ),
     ),
   );
+}
+
+function byDate(open: Task[], plannedToday: ReadonlySet<string>): HTMLElement[] {
+  const groups = groupByDate(open, today());
+  if (groups.length === 0) return [h("div", { class: "card empty" }, "No open tasks.")];
+  return groups.flatMap((group) => [
+    h("h2", {}, group.label),
+    taskList(
+      [...group.tasks, ...open.filter((task) => task.parentId && group.tasks.some((parent) => parent.id === task.parentId))],
+      { showTheme: true, todayToggle: true, plannedToday },
+    ),
+  ]);
+}
+
+function savedView(): TasksView {
+  try {
+    return localStorage.getItem(VIEW_KEY) === "date" ? "date" : "theme";
+  } catch {
+    return "theme";
+  }
+}
+
+function saveView(view: TasksView): void {
+  try {
+    localStorage.setItem(VIEW_KEY, view);
+  } catch {}
 }
 
 export async function renderTheme(root: HTMLElement, themeId: string): Promise<void> {
@@ -40,7 +86,7 @@ export async function renderTheme(root: HTMLElement, themeId: string): Promise<v
       "header",
       { class: "page" },
       h("h1", {}, h("span", { class: "dot", style: `background:${theme.color};width:14px;height:14px;margin-right:10px` }), theme.name),
-      h("a", { href: "#/themes", class: "muted" }, "All themes"),
+      h("a", { href: "#/tasks", class: "muted" }, "All tasks"),
     ),
     addTaskForm(themeId),
     h("h2", {}, "Tasks"),
