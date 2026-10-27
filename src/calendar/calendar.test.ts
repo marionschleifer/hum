@@ -217,11 +217,13 @@ describe("settings and lists", () => {
     expect(saveCalendarSettings(ctx, { mainCalendarId: "" })).toEqual({ account: "main@example.com" });
   });
 
-  it("lists calendars", async () => {
-    expect(await listCalendars(fakeApi({}).api, "main@example.com")).toEqual([
+  it("lists calendars, hidden ones included", async () => {
+    const { api, urls } = fakeApi({});
+    expect(await listCalendars(api, "main@example.com")).toEqual([
       { id: "main@example.com", summary: "main@example.com", primary: true },
       { id: "train", summary: "Training plan", primary: false },
     ]);
+    expect(urls[0]).toContain("showHidden=true");
   });
 
   it("rejects rules for unknown themes", () => {

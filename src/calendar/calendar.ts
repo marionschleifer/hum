@@ -67,7 +67,7 @@ export function saveCalendarSettings(ctx: Ctx, settings: CalendarSettings): Cale
 export async function listCalendars(api: GoogleApi, account: string): Promise<CalendarListEntry[]> {
   const data = await api.get<{ items?: { id: string; summary?: string; summaryOverride?: string; primary?: boolean }[] }>(
     account,
-    "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader",
+    "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader&showHidden=true",
   );
   return (data.items ?? []).map((item) => ({
     id: item.id,
