@@ -228,6 +228,10 @@ describe("calendar and planning", () => {
       "Training plan",
     ]);
     expect((await as("PUT", "/api/calendar/settings", { mainCalendarId: "me@example.com" })).body.mainCalendarId).toBe("me@example.com");
+    const sources = [{ calendarId: "me@example.com" }, { calendarId: "reclaim", themeId: "accounto" }];
+    expect((await as("PUT", "/api/calendar/settings", { sources })).body.sources).toEqual(sources);
+    expect((await as("PUT", "/api/calendar/settings", { sources: [{ calendarId: "x", themeId: "nope" }] })).status).toBe(400);
+    expect((await as("PUT", "/api/calendar/settings", { sources: "all" })).status).toBe(400);
     expect((await as("POST", "/api/calendar/rules", { title: "Weekly sync", themeId: "accounto" })).status).toBe(200);
     expect((await as("POST", "/api/calendar/hidden", { id: "e1", title: "Geburi Vera", start: "2026-11-04" })).status).toBe(201);
     expect((await as("GET", "/api/calendar/hidden")).body).toMatchObject([{ id: "e1", title: "Geburi Vera" }]);

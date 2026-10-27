@@ -3,9 +3,11 @@ import type { GoogleApi } from "../google/google.ts";
 import { listThemes, normalizeName, type Theme } from "../themes/themes.ts";
 import { addDays, localDay, zonedMidnight } from "./time.ts";
 
-export type CalendarSettings = { account?: string; mainCalendarId?: string };
+export type CalendarSource = { calendarId: string; themeId?: string };
 
-export type ThemeSource = "name" | "rule" | "ignored" | "unknown";
+export type CalendarSettings = { account?: string; mainCalendarId?: string; sources?: CalendarSource[] };
+
+export type ThemeSource = "name" | "rule" | "calendar" | "ignored" | "unknown";
 
 export type CalendarEvent = {
   id: string;
@@ -24,6 +26,8 @@ export type CalendarDay = { connected: boolean; meetings: CalendarEvent[] };
 
 export type CalendarListEntry = { id: string; summary: string; primary: boolean };
 
+type RawEvent = Omit<CalendarEvent, "themeId" | "themeSource">;
+
 type GoogleEvent = {
   id: string;
   summary?: string;
@@ -36,23 +40,27 @@ type GoogleEvent = {
 };
 
 const SETTING_KEYS = { account: "calendar_account", mainCalendarId: "calendar_main" } as const;
+const SOURCES_KEY = "calendar_sources";
 
 export function calendarSettings(ctx: Ctx): CalendarSettings {
   const settings: CalendarSettings = {};
   for (const [field, key] of Object.entries(SETTING_KEYS)) {
-    const row = ctx.db.query<{ value: string }, [string]>("SELECT value FROM meta WHERE key = ?").get(key);
-    if (row) settings[field as keyof CalendarSettings] = row.value;
+    const value = metaValue(ctx, key);
+    if (value !== undefined) settings[field as keyof typeof SETTING_KEYS] = value;
   }
+  const sources = metaValue(ctx, SOURCES_KEY);
+  if (sources !== undefined) settings.sources = JSON.parse(sources) as CalendarSource[];
   return settings;
 }
 
 export function saveCalendarSettings(ctx: Ctx, settings: CalendarSettings): CalendarSettings {
   for (const [field, key] of Object.entries(SETTING_KEYS)) {
-    const value = settings[field as keyof CalendarSettings];
+    const value = settings[field as keyof typeof SETTING_KEYS];
     if (value === undefined) continue;
     if (value === "") ctx.db.query("DELETE FROM meta WHERE key = ?").run(key);
-    else ctx.db.query("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, value);
+    else setMeta(ctx, key, value);
   }
+  if (settings.sources !== undefined) setMeta(ctx, SOURCES_KEY, JSON.stringify(cleanSources(ctx, settings.sources)));
   return calendarSettings(ctx);
 }
 
@@ -71,8 +79,13 @@ export async function listCalendars(api: GoogleApi, account: string): Promise<Ca
 export async function calendarDay(ctx: Ctx, api: GoogleApi | undefined, day: string, timeZone: string): Promise<CalendarDay> {
   const settings = calendarSettings(ctx);
   if (!api || !settings.account) return { connected: false, meetings: [] };
-  const meetings = settings.mainCalendarId ? await fetchEvents(ctx, api, settings.account, settings.mainCalendarId, day, timeZone) : [];
-  return { connected: true, meetings };
+  const account = settings.account;
+  const sources = settings.sources ?? (settings.mainCalendarId ? [{ calendarId: settings.mainCalendarId }] : []);
+  const fixedFirst = [...sources.filter((s) => s.themeId), ...sources.filter((s) => !s.themeId)];
+  const perCalendar = await Promise.all(
+    fixedFirst.map(async (source) => ({ source, events: await fetchEvents(api, account, source.calendarId, day, timeZone) })),
+  );
+  return { connected: true, meetings: mergeEvents(ctx, perCalendar) };
 }
 
 export function setTitleRule(ctx: Ctx, title: string, themeId: string | undefined): void {
@@ -123,14 +136,43 @@ export function themeForTitle(
   return matches.length === 1 ? { themeId: matches[0]!.id, themeSource: "name" } : { themeSource: "unknown" };
 }
 
-async function fetchEvents(
-  ctx: Ctx,
-  api: GoogleApi,
-  account: string,
-  calendarId: string,
-  day: string,
-  timeZone: string,
-): Promise<CalendarEvent[]> {
+function mergeEvents(ctx: Ctx, perCalendar: { source: CalendarSource; events: RawEvent[] }[]): CalendarEvent[] {
+  const themes = listThemes(ctx);
+  const rules = new Map(
+    ctx.db
+      .query<{ title_key: string; theme_id: string | null }, []>("SELECT title_key, theme_id FROM calendar_title_rules")
+      .all()
+      .map((row) => [row.title_key, row.theme_id ?? undefined] as const),
+  );
+  const hidden = new Set(
+    ctx.db.query<{ event_id: string }, []>("SELECT event_id FROM hidden_events").all().map((row) => row.event_id),
+  );
+  const seen = new Set<string>();
+  const events: CalendarEvent[] = [];
+  for (const { source, events: raw } of perCalendar) {
+    for (const event of raw) {
+      const keys = [`${normalizeName(event.title)}|${event.start}|${event.end}`, ...(event.allDay ? [] : [`span|${event.start}|${event.end}`])];
+      if (keys.some((key) => seen.has(key))) continue;
+      for (const key of keys) seen.add(key);
+      if (hidden.has(event.id)) continue;
+      events.push({ ...event, ...eventTheme(event.title, source, themes, rules) });
+    }
+  }
+  return events.sort((a, b) => a.start.localeCompare(b.start));
+}
+
+function eventTheme(
+  title: string,
+  source: CalendarSource,
+  themes: Theme[],
+  rules: Map<string, string | undefined>,
+): { themeId?: string; themeSource: ThemeSource } {
+  const byTitle = themeForTitle(title, themes, rules);
+  if (!source.themeId || byTitle.themeSource === "ignored") return byTitle;
+  return { themeId: source.themeId, themeSource: "calendar" };
+}
+
+async function fetchEvents(api: GoogleApi, account: string, calendarId: string, day: string, timeZone: string): Promise<RawEvent[]> {
   const from = zonedMidnight(day, timeZone);
   const to = zonedMidnight(addDays(day, 1), timeZone);
   const params = new URLSearchParams({
@@ -144,28 +186,27 @@ async function fetchEvents(
     account,
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
   );
+  return (data.items ?? []).flatMap((item) => toEvent(item, from, to, timeZone, day) ?? []);
+}
+
+function cleanSources(ctx: Ctx, sources: CalendarSource[]): CalendarSource[] {
   const themes = listThemes(ctx);
-  const rules = new Map(
-    ctx.db
-      .query<{ title_key: string; theme_id: string | null }, []>("SELECT title_key, theme_id FROM calendar_title_rules")
-      .all()
-      .map((row) => [row.title_key, row.theme_id ?? undefined] as const),
-  );
-  const hidden = new Set(
-    ctx.db.query<{ event_id: string }, []>("SELECT event_id FROM hidden_events").all().map((row) => row.event_id),
-  );
-  const seen = new Set<string>();
-  const events: CalendarEvent[] = [];
-  for (const item of data.items ?? []) {
-    const event = toEvent(item, from, to, timeZone, day);
-    if (!event) continue;
-    const key = `${normalizeName(event.title)}|${event.start}|${event.end}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    if (hidden.has(event.id)) continue;
-    events.push({ ...event, ...themeForTitle(event.title, themes, rules) });
+  const clean: CalendarSource[] = [];
+  for (const source of sources) {
+    if (!source?.calendarId?.trim()) fail(400, "Calendar id is required");
+    if (source.themeId && !themes.some((theme) => theme.id === source.themeId)) fail(400, "Unknown theme");
+    if (clean.some((existing) => existing.calendarId === source.calendarId)) continue;
+    clean.push(source.themeId ? { calendarId: source.calendarId, themeId: source.themeId } : { calendarId: source.calendarId });
   }
-  return events;
+  return clean;
+}
+
+function metaValue(ctx: Ctx, key: string): string | undefined {
+  return ctx.db.query<{ value: string }, [string]>("SELECT value FROM meta WHERE key = ?").get(key)?.value;
+}
+
+function setMeta(ctx: Ctx, key: string, value: string): void {
+  ctx.db.query("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, value);
 }
 
 function toEvent(
@@ -174,7 +215,7 @@ function toEvent(
   to: Date,
   timeZone: string,
   day: string,
-): Omit<CalendarEvent, "themeId" | "themeSource"> | undefined {
+): RawEvent | undefined {
   if (item.status === "cancelled") return undefined;
   if (item.attendees?.some((attendee) => attendee.self && attendee.responseStatus === "declined")) return undefined;
   const title = item.summary?.trim() || "(no title)";

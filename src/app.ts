@@ -29,6 +29,7 @@ import {
   saveCalendarSettings,
   setTitleRule,
   unhideEvent,
+  type CalendarSource,
 } from "./calendar/calendar.ts";
 import { captureAudio, captureText, describeCapture, type CaptureResult } from "./capture/capture.ts";
 import { fail, isHttpError, type Ctx } from "./context.ts";
@@ -290,8 +291,9 @@ function calendarRoutes(deps: AppDeps): Route[] {
     }),
     guard("GET", "/api/calendar/calendars", async () => json(await listCalendars(google().api, account()))),
     guard("PUT", "/api/calendar/settings", async (request) => {
-      const body = await readJson<{ mainCalendarId?: string }>(request);
-      return json(saveCalendarSettings(ctx, { mainCalendarId: body.mainCalendarId }));
+      const body = await readJson<{ mainCalendarId?: string; sources?: CalendarSource[] }>(request);
+      if (body.sources !== undefined && !Array.isArray(body.sources)) fail(400, "Which calendars?");
+      return json(saveCalendarSettings(ctx, { mainCalendarId: body.mainCalendarId, sources: body.sources }));
     }),
     guard("GET", "/api/calendar/hidden", () => json(listHiddenEvents(ctx))),
     guard("POST", "/api/calendar/hidden", async (request) => {

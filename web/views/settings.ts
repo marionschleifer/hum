@@ -72,7 +72,7 @@ export async function renderSettings(root: HTMLElement): Promise<void> {
 type GoogleStatus = {
   configured: boolean;
   accounts: { email: string; connectedAt: string }[];
-  settings: { account?: string; mainCalendarId?: string };
+  settings: { account?: string; mainCalendarId?: string; sources?: { calendarId: string; themeId?: string }[] };
 };
 
 function calendarSection(): HTMLElement {
@@ -96,23 +96,10 @@ function calendarSection(): HTMLElement {
         return;
       }
       const calendars = await api<{ id: string; summary: string; primary: boolean }[]>("GET", "/api/calendar/calendars");
-      const picker = (label: string, field: "mainCalendarId") => {
-        const select = h(
-          "select",
-          { "aria-label": label },
-          h("option", { value: "" }, "None"),
-          calendars.map((c) => h("option", { value: c.id, selected: status.settings[field] === c.id }, c.summary)),
-        );
-        select.addEventListener("change", async () => {
-          await api("PUT", "/api/calendar/settings", { [field]: select.value });
-          toast("Saved");
-        });
-        return h("label", { class: "field", style: "margin:0" }, h("span", {}, label), select);
-      };
       mount(
         container,
         h("div", {}, "Connected as ", h("strong", {}, account)),
-        picker("Meetings and events", "mainCalendarId"),
+        calendarSources(calendars, status.settings),
         hiddenEventsList(),
         h(
           "button",
@@ -209,6 +196,54 @@ function templateRow(day: string, entry: TemplateEntry | undefined) {
         ? []
         : [{ day: index, kind: kind.value as TemplateEntry["kind"], minMinutes: number(min), maxMinutes: number(max) }],
   };
+}
+
+function calendarSources(
+  calendars: { id: string; summary: string; primary: boolean }[],
+  settings: GoogleStatus["settings"],
+): HTMLElement {
+  const sources = settings.sources ?? (settings.mainCalendarId ? [{ calendarId: settings.mainCalendarId }] : []);
+  const chosen = new Map(sources.map((source) => [source.calendarId, source.themeId ?? ""]));
+  const save = async () => {
+    try {
+      const next = calendars.filter((c) => chosen.has(c.id)).map((c) => ({ calendarId: c.id, themeId: chosen.get(c.id) || undefined }));
+      await api("PUT", "/api/calendar/settings", { sources: next });
+      toast("Saved");
+    } catch (error) {
+      toast((error as Error).message, "error");
+    }
+  };
+  return h(
+    "div",
+    { style: "display:grid;gap:8px" },
+    h("span", { class: "muted", style: "font-size:13px" }, "Calendars Hum reads. A calendar with a theme puts all its meetings into that theme; otherwise Hum goes by the title. The same meeting in two calendars counts once."),
+    calendars.map((calendar) => {
+      const box = h("input", { type: "checkbox", checked: chosen.has(calendar.id), "aria-label": `Read ${calendar.summary}` });
+      const theme = h(
+        "select",
+        { "aria-label": `Theme for ${calendar.summary}`, disabled: !chosen.has(calendar.id) },
+        h("option", { value: "" }, "Theme from title"),
+        store.themes.map((t) => h("option", { value: t.id, selected: chosen.get(calendar.id) === t.id }, t.name)),
+      );
+      box.addEventListener("change", () => {
+        if (box.checked) chosen.set(calendar.id, theme.value);
+        else chosen.delete(calendar.id);
+        theme.disabled = !box.checked;
+        void save();
+      });
+      theme.addEventListener("change", () => {
+        chosen.set(calendar.id, theme.value);
+        void save();
+      });
+      return h(
+        "div",
+        { class: "row", style: "flex-wrap:nowrap;align-items:center" },
+        box,
+        h("span", { style: "flex:1;overflow-wrap:anywhere" }, calendar.summary),
+        theme,
+      );
+    }),
+  );
 }
 
 function learningsSection(): HTMLElement {

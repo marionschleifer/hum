@@ -117,9 +117,9 @@ Training minutes (the minimum of each session) count against the Exercise budget
 ## Calendar
 
 - Google Calendar, read-only, through the personal Google account with Hum's own Google OAuth client.
-- Hum reads one calendar (decided 2026-10-17): the account's main calendar, with all meetings and events, work included. Training lives in Hum itself.
-- Hum ignores every other calendar: secondary calendars, other accounts, feeds from scheduling tools, holiday calendars, and calendars shared by other people.
-- Hum dedupes events by title plus time.
+- Hum reads the calendars chosen under Settings (changed 2026-10-27; until then only the main calendar). Each chosen calendar either maps its events to themes by title, or puts all of them into one fixed theme, for example a scheduling tool's work feed into Accounto and a shared nonprofit calendar into Code Blossom. Training lives in Hum itself.
+- Calendars that are not chosen are ignored.
+- Hum dedupes events by title plus time, and timed events with exactly the same start and end count once across calendars. The copy from a fixed-theme calendar wins.
 - Hum maps events to themes by title. Obvious titles (for example "Accounto Hackathon & Team Dinner") are mapped automatically. When a title is unclear, Hum asks Marion once and remembers her answer.
 - An existing scheduling tool stays as it is for now. Replacing its sync is post-v1.
 

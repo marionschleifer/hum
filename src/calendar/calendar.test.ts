@@ -78,9 +78,9 @@ describe("calendarDay", () => {
     });
     const day = await calendarDay(ctx, api, "2026-10-17", tz);
     expect(day.meetings.map((e) => [e.title, e.minutes, e.blocking])).toEqual([
+      ["Busy maybe", 60, false],
       ["Dinner", 120, true],
       ["Night shift", 60, true],
-      ["Busy maybe", 60, false],
     ]);
   });
 
@@ -124,6 +124,73 @@ describe("calendarDay", () => {
       ["weekly  sync", "accounto", "rule"],
       ["Lunch with Anna", undefined, "ignored"],
       ["Workshop", undefined, "unknown"],
+    ]);
+  });
+});
+
+describe("several calendars", () => {
+  const reclaim = "reclaim-accounto";
+  const blossom = "marion@code-blossom.example";
+
+  function withSources() {
+    const ctx = connected();
+    saveCalendarSettings(ctx, {
+      sources: [{ calendarId: "main@example.com" }, { calendarId: reclaim, themeId: "accounto" }, { calendarId: blossom, themeId: "code-blossom" }],
+    });
+    return ctx;
+  }
+
+  it("reads every chosen calendar and gives a fixed-theme calendar's events its theme", async () => {
+    const { api, urls } = fakeApi({
+      "main@example.com": [timed("m1", "Dentist", "2026-10-17T08:00:00+02:00", "2026-10-17T08:30:00+02:00")],
+      [reclaim]: [timed("r1", "Sprint review", "2026-10-17T10:00:00+02:00", "2026-10-17T11:00:00+02:00")],
+      [blossom]: [timed("b1", "Mentor call", "2026-10-17T14:00:00+02:00", "2026-10-17T14:45:00+02:00")],
+    });
+    const day = await calendarDay(withSources(), api, "2026-10-17", tz);
+    expect(urls.filter((u) => u.includes("/events")).length).toBe(3);
+    expect(day.meetings.map((e) => [e.title, e.themeId, e.themeSource])).toEqual([
+      ["Dentist", undefined, "unknown"],
+      ["Sprint review", "accounto", "calendar"],
+      ["Mentor call", "code-blossom", "calendar"],
+    ]);
+  });
+
+  it("counts the same meeting once when it appears in two calendars, keeping the fixed-theme copy", async () => {
+    const { api } = fakeApi({
+      "main@example.com": [
+        timed("m1", "Busy", "2026-10-17T10:00:00+02:00", "2026-10-17T11:00:00+02:00"),
+        timed("m2", "Mentor call", "2026-10-17T14:00:00+02:00", "2026-10-17T14:45:00+02:00"),
+      ],
+      [reclaim]: [timed("r1", "Sprint review", "2026-10-17T10:00:00+02:00", "2026-10-17T11:00:00+02:00")],
+      [blossom]: [timed("b1", "Mentor call", "2026-10-17T14:00:00+02:00", "2026-10-17T14:45:00+02:00")],
+    });
+    const day = await calendarDay(withSources(), api, "2026-10-17", tz);
+    expect(day.meetings.map((e) => [e.id, e.themeId])).toEqual([
+      ["r1", "accounto"],
+      ["b1", "code-blossom"],
+    ]);
+  });
+
+  it("still lets a 'not a theme' rule and hidden events win over a calendar's theme", async () => {
+    const ctx = withSources();
+    setTitleRule(ctx, "Focus time", undefined);
+    hideEvent(ctx, { id: "r2", title: "Lunch", start: "2026-10-17" });
+    const { api } = fakeApi({
+      [reclaim]: [
+        timed("r1", "Focus time", "2026-10-17T09:00:00+02:00", "2026-10-17T10:00:00+02:00"),
+        timed("r2", "Lunch", "2026-10-17T12:00:00+02:00", "2026-10-17T13:00:00+02:00"),
+      ],
+    });
+    const day = await calendarDay(ctx, api, "2026-10-17", tz);
+    expect(day.meetings.map((e) => [e.title, e.themeId, e.themeSource])).toEqual([["Focus time", undefined, "ignored"]]);
+  });
+
+  it("falls back to the main calendar until calendars are chosen, and checks the themes", () => {
+    const ctx = connected();
+    expect(calendarSettings(ctx).sources).toBeUndefined();
+    expect(() => saveCalendarSettings(ctx, { sources: [{ calendarId: "x", themeId: "nope" }] })).toThrow("Unknown theme");
+    expect(saveCalendarSettings(ctx, { sources: [{ calendarId: "x" }, { calendarId: "x", themeId: "accounto" }] }).sources).toEqual([
+      { calendarId: "x" },
     ]);
   });
 });
