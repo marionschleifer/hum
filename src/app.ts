@@ -300,9 +300,9 @@ function calendarRoutes(deps: AppDeps): Route[] {
     }),
     guard("GET", "/api/calendar/calendars", async () => json(await listCalendars(google().api, account()))),
     guard("PUT", "/api/calendar/settings", async (request) => {
-      const body = await readJson<{ mainCalendarId?: string; sources?: CalendarSource[] }>(request);
+      const body = await readJson<{ mainCalendarId?: string; sources?: CalendarSource[]; copiesThemeId?: string }>(request);
       if (body.sources !== undefined && !Array.isArray(body.sources)) fail(400, "Which calendars?");
-      return json(saveCalendarSettings(ctx, { mainCalendarId: body.mainCalendarId, sources: body.sources }));
+      return json(saveCalendarSettings(ctx, { mainCalendarId: body.mainCalendarId, sources: body.sources, copiesThemeId: body.copiesThemeId }));
     }),
     guard("GET", "/api/calendar/hidden", () => json(listHiddenEvents(ctx))),
     guard("POST", "/api/calendar/hidden", async (request) => {

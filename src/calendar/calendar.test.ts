@@ -185,6 +185,44 @@ describe("several calendars", () => {
     expect(day.meetings.map((e) => [e.title, e.themeId, e.themeSource])).toEqual([["Focus time", undefined, "ignored"]]);
   });
 
+  it("lets a clear title or a remembered rule beat the calendar's theme", async () => {
+    const ctx = withSources();
+    setTitleRule(ctx, "Weekly sync", "hvnly");
+    const { api } = fakeApi({
+      [blossom]: [
+        timed("b1", "Accounto standup", "2026-10-17T09:00:00+02:00", "2026-10-17T09:30:00+02:00"),
+        timed("b2", "Weekly sync", "2026-10-17T10:00:00+02:00", "2026-10-17T10:30:00+02:00"),
+        timed("b3", "Mentor call", "2026-10-17T11:00:00+02:00", "2026-10-17T11:30:00+02:00"),
+      ],
+    });
+    const day = await calendarDay(ctx, api, "2026-10-17", tz);
+    expect(day.meetings.map((e) => [e.title, e.themeId, e.themeSource])).toEqual([
+      ["Accounto standup", "accounto", "name"],
+      ["Weekly sync", "hvnly", "rule"],
+      ["Mentor call", "code-blossom", "calendar"],
+    ]);
+  });
+
+  it("puts meetings Reclaim copied in from another calendar into the chosen theme", async () => {
+    const ctx = withSources();
+    saveCalendarSettings(ctx, { copiesThemeId: "accounto" });
+    const copied = { extendedProperties: { private: { "reclaim.personalSync": "true", "reclaim.personalSync.calendarId": "outlook" } } };
+    const { api } = fakeApi({
+      [blossom]: [
+        timed("b1", "Sprint planning", "2026-10-17T09:00:00+02:00", "2026-10-17T10:00:00+02:00", copied),
+        timed("b2", "Mentor call", "2026-10-17T11:00:00+02:00", "2026-10-17T11:30:00+02:00"),
+      ],
+    });
+    const day = await calendarDay(ctx, api, "2026-10-17", tz);
+    expect(day.meetings.map((e) => [e.title, e.themeId, e.themeSource])).toEqual([
+      ["Sprint planning", "accounto", "copy"],
+      ["Mentor call", "code-blossom", "calendar"],
+    ]);
+    expect(calendarSettings(ctx).copiesThemeId).toBe("accounto");
+    expect(() => saveCalendarSettings(ctx, { copiesThemeId: "nope" })).toThrow("Unknown theme");
+    expect(saveCalendarSettings(ctx, { copiesThemeId: "" }).copiesThemeId).toBeUndefined();
+  });
+
   it("falls back to the main calendar until calendars are chosen, and checks the themes", () => {
     const ctx = connected();
     expect(calendarSettings(ctx).sources).toBeUndefined();

@@ -72,7 +72,7 @@ export async function renderSettings(root: HTMLElement): Promise<void> {
 type GoogleStatus = {
   configured: boolean;
   accounts: { email: string; connectedAt: string }[];
-  settings: { account?: string; mainCalendarId?: string; sources?: { calendarId: string; themeId?: string }[] };
+  settings: { account?: string; mainCalendarId?: string; sources?: { calendarId: string; themeId?: string }[]; copiesThemeId?: string };
 };
 
 function calendarSection(): HTMLElement {
@@ -100,6 +100,7 @@ function calendarSection(): HTMLElement {
         container,
         h("div", {}, "Connected as ", h("strong", {}, account)),
         calendarSources(calendars, status.settings),
+        copiesTheme(status.settings.copiesThemeId),
         hiddenEventsList(),
         h(
           "button",
@@ -216,7 +217,7 @@ function calendarSources(
   return h(
     "div",
     { style: "display:grid;gap:8px" },
-    h("span", { class: "muted", style: "font-size:13px" }, "Calendars Hum reads. A calendar with a theme puts all its meetings into that theme; otherwise Hum goes by the title. The same meeting in two calendars counts once."),
+    h("span", { class: "muted", style: "font-size:13px" }, "Calendars Hum reads. A meeting goes to the theme its title names, or the one you told Hum before. Otherwise a calendar with a theme puts it there, and a calendar without one makes Hum ask. The same meeting in two calendars counts once."),
     calendars.map((calendar) => {
       const box = h("input", { type: "checkbox", checked: chosen.has(calendar.id), "aria-label": `Read ${calendar.summary}` });
       const theme = h(
@@ -243,6 +244,29 @@ function calendarSources(
         theme,
       );
     }),
+  );
+}
+
+function copiesTheme(current: string | undefined): HTMLElement {
+  const select = h(
+    "select",
+    { "aria-label": "Theme for meetings Reclaim copies in" },
+    h("option", { value: "" }, "Like any other meeting"),
+    store.themes.map((t) => h("option", { value: t.id, selected: current === t.id }, t.name)),
+  );
+  select.addEventListener("change", async () => {
+    try {
+      await api("PUT", "/api/calendar/settings", { copiesThemeId: select.value });
+      toast("Saved");
+    } catch (error) {
+      toast((error as Error).message, "error");
+    }
+  });
+  return h(
+    "label",
+    { class: "field", style: "margin:0" },
+    h("span", {}, "Meetings Reclaim copies in from other calendars count as"),
+    select,
   );
 }
 

@@ -5,9 +5,9 @@ import { addDays, localDay, zonedMidnight } from "./time.ts";
 
 export type CalendarSource = { calendarId: string; themeId?: string };
 
-export type CalendarSettings = { account?: string; mainCalendarId?: string; sources?: CalendarSource[] };
+export type CalendarSettings = { account?: string; mainCalendarId?: string; sources?: CalendarSource[]; copiesThemeId?: string };
 
-export type ThemeSource = "name" | "rule" | "calendar" | "ignored" | "unknown";
+export type ThemeSource = "name" | "rule" | "copy" | "calendar" | "ignored" | "unknown";
 
 export type CalendarEvent = {
   id: string;
@@ -26,7 +26,7 @@ export type CalendarDay = { connected: boolean; meetings: CalendarEvent[] };
 
 export type CalendarListEntry = { id: string; summary: string; primary: boolean };
 
-type RawEvent = Omit<CalendarEvent, "themeId" | "themeSource">;
+type RawEvent = Omit<CalendarEvent, "themeId" | "themeSource"> & { copied: boolean };
 
 type GoogleEvent = {
   id: string;
@@ -37,10 +37,13 @@ type GoogleEvent = {
   start?: { dateTime?: string; date?: string };
   end?: { dateTime?: string; date?: string };
   attendees?: { self?: boolean; responseStatus?: string }[];
+  extendedProperties?: { private?: Record<string, string> };
 };
 
 const SETTING_KEYS = { account: "calendar_account", mainCalendarId: "calendar_main" } as const;
 const SOURCES_KEY = "calendar_sources";
+const COPIES_THEME_KEY = "calendar_copies_theme";
+const COPY_MARKER = "reclaim.personalSync";
 
 export function calendarSettings(ctx: Ctx): CalendarSettings {
   const settings: CalendarSettings = {};
@@ -50,6 +53,8 @@ export function calendarSettings(ctx: Ctx): CalendarSettings {
   }
   const sources = metaValue(ctx, SOURCES_KEY);
   if (sources !== undefined) settings.sources = JSON.parse(sources) as CalendarSource[];
+  const copiesThemeId = metaValue(ctx, COPIES_THEME_KEY);
+  if (copiesThemeId !== undefined) settings.copiesThemeId = copiesThemeId;
   return settings;
 }
 
@@ -61,6 +66,11 @@ export function saveCalendarSettings(ctx: Ctx, settings: CalendarSettings): Cale
     else setMeta(ctx, key, value);
   }
   if (settings.sources !== undefined) setMeta(ctx, SOURCES_KEY, JSON.stringify(cleanSources(ctx, settings.sources)));
+  if (settings.copiesThemeId === "") ctx.db.query("DELETE FROM meta WHERE key = ?").run(COPIES_THEME_KEY);
+  else if (settings.copiesThemeId !== undefined) {
+    if (!listThemes(ctx).some((theme) => theme.id === settings.copiesThemeId)) fail(400, "Unknown theme");
+    setMeta(ctx, COPIES_THEME_KEY, settings.copiesThemeId);
+  }
   return calendarSettings(ctx);
 }
 
@@ -85,7 +95,7 @@ export async function calendarDay(ctx: Ctx, api: GoogleApi | undefined, day: str
   const perCalendar = await Promise.all(
     fixedFirst.map(async (source) => ({ source, events: await fetchEvents(api, account, source.calendarId, day, timeZone) })),
   );
-  return { connected: true, meetings: mergeEvents(ctx, perCalendar) };
+  return { connected: true, meetings: mergeEvents(ctx, perCalendar, settings.copiesThemeId) };
 }
 
 export function setTitleRule(ctx: Ctx, title: string, themeId: string | undefined): void {
@@ -136,7 +146,11 @@ export function themeForTitle(
   return matches.length === 1 ? { themeId: matches[0]!.id, themeSource: "name" } : { themeSource: "unknown" };
 }
 
-function mergeEvents(ctx: Ctx, perCalendar: { source: CalendarSource; events: RawEvent[] }[]): CalendarEvent[] {
+function mergeEvents(
+  ctx: Ctx,
+  perCalendar: { source: CalendarSource; events: RawEvent[] }[],
+  copiesThemeId: string | undefined,
+): CalendarEvent[] {
   const themes = listThemes(ctx);
   const rules = new Map(
     ctx.db
@@ -155,7 +169,8 @@ function mergeEvents(ctx: Ctx, perCalendar: { source: CalendarSource; events: Ra
       if (keys.some((key) => seen.has(key))) continue;
       for (const key of keys) seen.add(key);
       if (hidden.has(event.id)) continue;
-      events.push({ ...event, ...eventTheme(event.title, source, themes, rules) });
+      const { copied, ...rest } = event;
+      events.push({ ...rest, ...eventTheme(event.title, copied ? copiesThemeId : undefined, source, themes, rules) });
     }
   }
   return events.sort((a, b) => a.start.localeCompare(b.start));
@@ -163,12 +178,15 @@ function mergeEvents(ctx: Ctx, perCalendar: { source: CalendarSource; events: Ra
 
 function eventTheme(
   title: string,
+  copyThemeId: string | undefined,
   source: CalendarSource,
   themes: Theme[],
   rules: Map<string, string | undefined>,
 ): { themeId?: string; themeSource: ThemeSource } {
   const byTitle = themeForTitle(title, themes, rules);
-  if (!source.themeId || byTitle.themeSource === "ignored") return byTitle;
+  if (byTitle.themeSource === "rule" || byTitle.themeSource === "ignored") return byTitle;
+  if (copyThemeId) return { themeId: copyThemeId, themeSource: "copy" };
+  if (byTitle.themeSource === "name" || !source.themeId) return byTitle;
   return { themeId: source.themeId, themeSource: "calendar" };
 }
 
@@ -223,7 +241,7 @@ function toEvent(
     const start = item.start.date;
     const end = item.end?.date ?? addDays(start, 1);
     if (end <= day || start > day) return undefined;
-    return { id: item.id, title, allDay: true, start, end, minutes: 0, blocking: false, description: item.description };
+    return { id: item.id, title, allDay: true, start, end, minutes: 0, blocking: false, description: item.description, copied: isCopy(item) };
   }
   if (!item.start?.dateTime || !item.end?.dateTime) return undefined;
   const start = new Date(item.start.dateTime);
@@ -239,7 +257,12 @@ function toEvent(
     minutes: Math.round(overlap / 60_000),
     blocking: item.transparency !== "transparent",
     description: item.description,
+    copied: isCopy(item),
   };
+}
+
+function isCopy(item: GoogleEvent): boolean {
+  return Object.keys(item.extendedProperties?.private ?? {}).some((key) => key === COPY_MARKER || key.startsWith(`${COPY_MARKER}.`));
 }
 
 function containsWord(haystack: string, needle: string): boolean {
