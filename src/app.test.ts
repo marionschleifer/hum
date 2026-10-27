@@ -36,6 +36,23 @@ async function loggedIn(overrides: Partial<AppDeps> = {}) {
   return { ...env, as, authenticator, cookie };
 }
 
+describe("privacy page", () => {
+  it("is public and says what Hum does with Google data, naming the owner", async () => {
+    const response = (await createApp({ ctx: testCtx(), config: { ...config, ownerName: "Ada" } }).fetch(new Request(`${origin}/privacy`)))!;
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/html");
+    const page = await response.text();
+    expect(page).toContain("read-only access to Google Calendar");
+    expect(page).toContain("used by Ada alone");
+    expect(page).not.toContain("—");
+  });
+
+  it("escapes the owner's name", async () => {
+    const response = (await createApp({ ctx: testCtx(), config: { ...config, ownerName: "<b>" } }).fetch(new Request(`${origin}/privacy`)))!;
+    expect(await response.text()).toContain("&#60;b&#62;");
+  });
+});
+
 describe("auth", () => {
   it("needs the setup token to register the first passkey", async () => {
     const { call } = setup();

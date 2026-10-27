@@ -44,6 +44,7 @@ import {
   type GoogleApi,
   type GoogleOAuthConfig,
 } from "./google/google.ts";
+import { privacyPage } from "./http/privacy.ts";
 import { createRouter, json, readJson, type Handler, type Route } from "./http/router.ts";
 import { previewImport, runImport, type ImportTarget, type TodoistData } from "./import/todoist.ts";
 import { addLearning, deleteLearning, listLearnings, updateLearning } from "./learnings/learnings.ts";
@@ -93,7 +94,7 @@ export type AppDeps = {
 };
 
 export function createApp(deps: AppDeps): { fetch: (request: Request) => Promise<Response | undefined> } {
-  const route = createRouter([...authRoutes(deps), ...dataRoutes(deps), ...captureRoutes(deps), ...settingsRoutes(deps), ...calendarRoutes(deps), ...planRoutes(deps), ...eveningRoutes(deps), ...trainingRoutes(deps)]);
+  const route = createRouter([...publicRoutes(deps), ...authRoutes(deps), ...dataRoutes(deps), ...captureRoutes(deps), ...settingsRoutes(deps), ...calendarRoutes(deps), ...planRoutes(deps), ...eveningRoutes(deps), ...trainingRoutes(deps)]);
   return {
     fetch: async (request) => {
       try {
@@ -105,6 +106,14 @@ export function createApp(deps: AppDeps): { fetch: (request: Request) => Promise
       }
     },
   };
+}
+
+function publicRoutes(deps: AppDeps): Route[] {
+  return [
+    route("GET", "/privacy", () =>
+      new Response(privacyPage(deps.config.ownerName), { headers: { "content-type": "text/html; charset=utf-8" } }),
+    ),
+  ];
 }
 
 function authRoutes(deps: AppDeps): Route[] {
