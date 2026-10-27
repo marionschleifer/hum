@@ -129,7 +129,11 @@ function calendarSection(): HTMLElement {
         ),
       );
     } catch (failure) {
-      mount(container, h("p", { style: "margin:0;color:var(--danger)" }, (failure as Error).message));
+      mount(
+        container,
+        h("p", { style: "margin:0;color:var(--danger)" }, (failure as Error).message),
+        h("a", { class: "btn primary", href: "/api/google/connect", style: "text-align:center;text-decoration:none" }, "Reconnect Google Calendar"),
+      );
     }
   })();
   return container;
