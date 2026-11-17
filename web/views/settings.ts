@@ -226,7 +226,7 @@ function calendarSources(
       const box = h("input", { type: "checkbox", checked: chosen.has(calendar.id), "aria-label": `Read ${calendar.summary}` });
       const theme = h(
         "select",
-        { "aria-label": `Theme for ${calendar.summary}`, disabled: !chosen.has(calendar.id) },
+        { "aria-label": `Theme for ${calendar.summary}`, disabled: !chosen.has(calendar.id), style: "width:auto;flex:none;max-width:48%" },
         h("option", { value: "" }, "Theme from title"),
         store.themes.map((t) => h("option", { value: t.id, selected: chosen.get(calendar.id) === t.id }, t.name)),
       );

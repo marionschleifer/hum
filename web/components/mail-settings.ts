@@ -80,21 +80,26 @@ function accountRow(
   );
   return h(
     "div",
-    { class: "row", style: "flex-wrap:nowrap;align-items:center" },
-    h("span", { style: "flex:1;overflow-wrap:anywhere" }, account.email),
-    theme,
+    { style: "display:grid;gap:6px" },
+    h("strong", { style: "overflow-wrap:anywhere;font-weight:600" }, account.email),
     h(
-      "button",
-      {
-        type: "button",
-        class: "btn small",
-        onclick: async () => {
-          if (!confirm(`Stop checking ${account.email}?`)) return;
-          await api("DELETE", `/api/mail/accounts/${encodeURIComponent(account.email)}`);
-          await reload();
+      "div",
+      { class: "row", style: "flex-wrap:nowrap;align-items:center" },
+      h("span", { class: "muted", style: "font-size:13px;flex:none" }, "Tasks go to"),
+      theme,
+      h(
+        "button",
+        {
+          type: "button",
+          class: "btn small",
+          onclick: async () => {
+            if (!confirm(`Stop checking ${account.email}?`)) return;
+            await api("DELETE", `/api/mail/accounts/${encodeURIComponent(account.email)}`);
+            await reload();
+          },
         },
-      },
-      "Remove",
+        "Remove",
+      ),
     ),
   );
 }
