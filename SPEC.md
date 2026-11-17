@@ -48,7 +48,7 @@ This is the main ritual. There are no templates and no default hours, ever. Ever
 
 1. **Sort the inbox.** Skippable. Unsorted items are not planned.
 2. **Show today.** Today's calendar plus tasks that are due or overdue.
-3. **Set budgets and energy.** Marion says or types a time budget per theme and her energy:
+3. **Set budgets and energy.** Marion says or types a time budget per theme and her energy. Every time field (budget, open work, time spent) takes typed values next to its −/+ buttons (added 2026-11-17): a bare number is hours (2, 1.5, 1,5), and 90m, 1h30 and 1:30 work too:
    - High, Normal or Lower,
    - a small, hidden Sick button,
    - optional free text.

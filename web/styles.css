@@ -675,3 +675,12 @@ button.strip-day.today {
   padding: 6px 0;
   font-variant-numeric: tabular-nums;
 }
+
+input.minutes-field {
+  width: 76px;
+  flex: none;
+  padding: 6px 4px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}

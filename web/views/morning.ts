@@ -1,5 +1,6 @@
 import { eveningApi, planApi, type TodayView } from "../api.ts";
 import { meetingRows, calendarNotice } from "../components/calendar.ts";
+import { minutesField } from "../components/minutes-field.ts";
 import { taskList } from "../components/task-row.ts";
 import { formatMinutes, h, mount, toast } from "../dom.ts";
 import { store } from "../state.ts";
@@ -7,6 +8,7 @@ import { renderInbox } from "./inbox.ts";
 
 type Energy = "high" | "normal" | "lower" | "sick";
 const STEP_MINUTES = 30;
+const MAX_MINUTES = 16 * 60;
 
 export async function renderMorning(root: HTMLElement, step: string | undefined): Promise<void> {
   if (step === "calendar") return renderCalendarStep(root);
@@ -64,15 +66,17 @@ async function renderBudgetStep(root: HTMLElement, replan: boolean): Promise<voi
         const minutes = draft.budgets[theme.id] ?? 0;
         const meetings = view.meetings.filter((e) => e.themeId === theme.id && e.blocking).reduce((sum, e) => sum + e.minutes, 0);
         const open = Math.min(minutes, draft.openWork[theme.id] ?? 0);
-        const change = (delta: number) => {
-          draft.budgets[theme.id] = Math.max(0, minutes + delta);
+        const setBudget = (next: number) => {
+          draft.budgets[theme.id] = Math.min(MAX_MINUTES, Math.max(0, next));
           draft.openWork[theme.id] = Math.min(draft.budgets[theme.id]!, open);
           renderRows();
         };
-        const changeOpen = (delta: number) => {
-          draft.openWork[theme.id] = Math.min(minutes, Math.max(0, open + delta));
+        const setOpen = (next: number) => {
+          draft.openWork[theme.id] = Math.min(minutes, Math.max(0, next));
           renderRows();
         };
+        const change = (delta: number) => setBudget(minutes + delta);
+        const changeOpen = (delta: number) => setOpen(open + delta);
         return [
           h(
             "div",
@@ -80,7 +84,7 @@ async function renderBudgetStep(root: HTMLElement, replan: boolean): Promise<voi
             h("span", { class: "dot", style: `background:${theme.color}` }),
             h("div", { class: "body" }, theme.name, meetings ? h("div", { class: "meta" }, `${formatMinutes(meetings)} of meetings`) : undefined),
             h("button", { type: "button", class: "icon-btn", "aria-label": `Less time for ${theme.name}`, onclick: () => change(-STEP_MINUTES) }, "−"),
-            h("span", { class: "budget-value" }, minutes ? formatMinutes(minutes) : "0"),
+            minutesField({ minutes, label: `Time for ${theme.name}`, onChange: setBudget }),
             h("button", { type: "button", class: "icon-btn", "aria-label": `More time for ${theme.name}`, onclick: () => change(STEP_MINUTES) }, "+"),
           ),
           minutes
@@ -89,7 +93,7 @@ async function renderBudgetStep(root: HTMLElement, replan: boolean): Promise<voi
                 { class: "task budget-row open-row", style: "cursor:default;align-items:center" },
                 h("div", { class: "body meta" }, "of that, open work (email, admin)"),
                 h("button", { type: "button", class: "icon-btn", "aria-label": `Less open work for ${theme.name}`, onclick: () => changeOpen(-STEP_MINUTES) }, "−"),
-                h("span", { class: "budget-value" }, open ? formatMinutes(open) : "0"),
+                minutesField({ minutes: open, label: `Open work for ${theme.name}`, onChange: setOpen }),
                 h("button", { type: "button", class: "icon-btn", "aria-label": `More open work for ${theme.name}`, onclick: () => changeOpen(STEP_MINUTES) }, "+"),
               )
             : undefined,

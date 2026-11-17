@@ -1,9 +1,11 @@
 import { eveningApi, type EveningView } from "../api.ts";
 import { formatMinutes, h, mount, toast } from "../dom.ts";
 import { store } from "../state.ts";
+import { minutesField } from "./minutes-field.ts";
 import { recordButton } from "./recorder.ts";
 
 const STEP_MINUTES = 15;
+const MAX_MINUTES = 16 * 60;
 
 export function timeSpentBlock(time: EveningView["time"], values: Record<string, number>): HTMLElement {
   for (const theme of time.themes) values[theme.themeId] ??= time.spent?.[theme.themeId] ?? theme.budget;
@@ -15,17 +17,18 @@ export function timeSpentBlock(time: EveningView["time"], values: Record<string,
       time.themes.map((theme) => {
         const info = store.themes.find((t) => t.id === theme.themeId);
         const minutes = values[theme.themeId] ?? 0;
-        const change = (delta: number) => {
-          values[theme.themeId] = Math.max(0, minutes + delta);
+        const set = (next: number) => {
+          values[theme.themeId] = Math.min(MAX_MINUTES, Math.max(0, next));
           renderRows();
         };
+        const change = (delta: number) => set(minutes + delta);
         return h(
           "div",
           { class: "task budget-row", style: "cursor:default;align-items:center" },
           h("span", { class: "dot", style: `background:${info?.color ?? "#888"}` }),
           h("div", { class: "body" }, info?.name ?? theme.themeId, h("div", { class: "meta" }, budgetText(theme.budget, theme.openMinutes))),
           h("button", { type: "button", class: "icon-btn", "aria-label": `Less time for ${info?.name}`, onclick: () => change(-STEP_MINUTES) }, "−"),
-          h("span", { class: "budget-value" }, minutes ? formatMinutes(minutes) : "0"),
+          minutesField({ minutes, label: `Time spent on ${info?.name}`, onChange: set }),
           h("button", { type: "button", class: "icon-btn", "aria-label": `More time for ${info?.name}`, onclick: () => change(STEP_MINUTES) }, "+"),
         );
       }),
