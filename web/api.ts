@@ -9,10 +9,12 @@ import type { Task } from "../src/tasks/tasks.ts";
 import type { Theme } from "../src/themes/themes.ts";
 import type { TemplateEntry, TrainingSession, TrainingWeek } from "../src/training/training.ts";
 import type { WeekSummary } from "../src/timespent/timespent.ts";
+import type { BookStatus, LearningItem, LearningKind, LearningList } from "../src/learning/learning.ts";
 import { today } from "./dom.ts";
 
 export type { Answer, EveningItem, EveningView, Learning, Suggestion, TemplateEntry, TrainingSession, TrainingWeek, WrapUpResult };
 export type { WeekSummary };
+export type { BookStatus, LearningItem, LearningKind, LearningList };
 export type TrainingTemplate = { template: TemplateEntry[]; tenK: TemplateEntry[] };
 export type { CalendarEvent, DayPlanView, Project, Task, Theme, ThemePlanView, TodayView };
 export type CaptureResponse = CaptureResult & { message: string };
@@ -108,4 +110,10 @@ export const trainingApi = {
   add: (date: string, kind: TrainingSession["kind"]) => api<TrainingSession>("POST", "/api/training/sessions", { date, kind }),
   template: () => api<TrainingTemplate>("GET", "/api/training/template"),
   saveTemplate: (template: TemplateEntry[]) => api<TrainingTemplate>("PUT", "/api/training/template", { template }),
+};
+
+export const learningApi = {
+  list: () => api<LearningList>("GET", "/api/learning"),
+  add: (input: { kind: LearningKind; title?: string; url?: string }) => api<LearningItem>("POST", "/api/learning", input),
+  book: (id: string, status: BookStatus) => api<LearningItem>("POST", `/api/learning/${id}/book`, { status, today: today() }),
 };

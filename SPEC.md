@@ -42,9 +42,15 @@ Todoist forces every task onto a date. Marion's weeks never repeat: a job, trave
   - L = half a day
 - The AI suggests a size, Marion confirms it, and the AI learns from actual durations over time.
 
+## Learning
+
+- A Learning tab beside Today, Inbox and Tasks (added 2026-11-17) holds three kinds of items: tasks, books and YouTube videos. Pasting a video's link fills in its title from YouTube.
+- Books are To read, Reading or Done. Done books move to a Read list and can go back to To read.
+- All items belong to the Learning theme. Its daily budget is a free hour: Hum never fills it with items. Today shows the hour with the current books, videos and tasks to pick from. A learning task picked for today still shows in the plan.
+
 ## Morning ritual
 
-This is the main ritual. There are no templates and no default hours, ever. Every day starts blank.
+This is the main ritual. There are no templates and no default hours, with one exception Marion asked for on 2026-11-17: the Learning theme starts at 1 hour every day, weekends included, and she can change it that day. Every other theme starts blank.
 
 1. **Sort the inbox.** Skippable. Unsorted items are not planned.
 2. **Show today.** Today's calendar plus tasks that are due or overdue.

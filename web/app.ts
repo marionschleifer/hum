@@ -5,6 +5,7 @@ import { loadReference, store } from "./state.ts";
 import { renderArchive } from "./views/archive.ts";
 import { renderEvening } from "./views/evening.ts";
 import { renderInbox } from "./views/inbox.ts";
+import { renderLearning } from "./views/learning.ts";
 import { renderLogin } from "./views/login.ts";
 import { renderMorning } from "./views/morning.ts";
 import { renderSettings } from "./views/settings.ts";
@@ -17,6 +18,7 @@ const tabs = [
   { hash: "#/today", label: "Today" },
   { hash: "#/inbox", label: "Inbox" },
   { hash: "#/tasks", label: "Tasks" },
+  { hash: "#/learning", label: "Learning" },
   { hash: "#/week", label: "Week" },
   { hash: "#/settings", label: "Settings" },
 ];
@@ -53,6 +55,7 @@ async function renderRoute(main: HTMLElement): Promise<void> {
     else if (page === "settings") await renderSettings(main);
     else if (page === "archive") await renderArchive(main);
     else if (page === "week") await renderWeek(main, id);
+    else if (page === "learning") await renderLearning(main);
     else if (page === "morning") await renderMorning(main, id);
     else if (page === "evening") await renderEvening(main, id, location.hash.includes("then=morning"));
     else await renderToday(main);

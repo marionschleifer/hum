@@ -1,4 +1,4 @@
-import { eveningApi, planApi, tasksApi, type DayPlanView, type ThemePlanView, type TodayView } from "../api.ts";
+import { eveningApi, learningApi, planApi, tasksApi, type DayPlanView, type ThemePlanView, type TodayView } from "../api.ts";
 import { atRiskBox } from "../components/at-risk.ts";
 import { calendarNotice, meetingRows } from "../components/calendar.ts";
 import { suggestionCards } from "../components/suggestions.ts";
@@ -8,6 +8,7 @@ import { openTaskSheet } from "../components/task-sheet.ts";
 import { formatMinutes, h, mount, today } from "../dom.ts";
 import { themeById } from "../state.ts";
 
+const LEARNING_PICKS = 5;
 const DEADLINE_WINDOW_DAYS = 7;
 
 export async function renderToday(root: HTMLElement): Promise<void> {
@@ -73,7 +74,8 @@ function themeCard(plan: ThemePlanView, view: TodayView): HTMLElement {
       { class: "card" },
       meetingRows(meetings),
       sessionRows(training),
-      plan.openMinutes
+      plan.openMinutes && plan.themeId === "learning" ? learningHour(plan.openMinutes) : undefined,
+      plan.openMinutes && plan.themeId !== "learning"
         ? h("div", { class: "task", style: "cursor:default" }, h("div", { class: "body" }, "Open work", h("div", { class: "meta" }, `${formatMinutes(plan.openMinutes)} for email and other work that isn't a todo`)))
         : undefined,
       plan.items.map((item) =>
@@ -143,4 +145,31 @@ function addDays(day: string, days: number): string {
   const date = new Date(`${day}T12:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+function learningHour(minutes: number): HTMLElement {
+  const container = h(
+    "div",
+    { class: "task", style: "cursor:default;display:block" },
+    h("div", { class: "body" }, `${formatMinutes(minutes)} to learn`, h("div", { class: "meta" }, "Pick from your list")),
+  );
+  void learningApi
+    .list()
+    .then((list) => {
+      const picks = [...list.reading, ...list.videos, ...list.tasks].slice(0, LEARNING_PICKS);
+      container.append(
+        ...picks.map((item) =>
+          h(
+            "div",
+            { class: "meta", style: "margin-top:6px" },
+            item.kind === "video" && item.url
+              ? ["Video: ", h("a", { href: item.url, target: "_blank", rel: "noopener noreferrer" }, item.title)]
+              : `${item.kind === "book" ? "Reading" : "Task"}: ${item.title}`,
+          ),
+        ),
+        h("a", { href: "#/learning", class: "muted", style: "display:inline-block;margin-top:8px;font-size:13px" }, picks.length ? "All of Learning" : "Add books, videos or tasks"),
+      );
+    })
+    .catch(() => {});
+  return container;
 }

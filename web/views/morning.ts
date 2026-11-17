@@ -9,6 +9,7 @@ import { renderInbox } from "./inbox.ts";
 type Energy = "high" | "normal" | "lower" | "sick";
 const STEP_MINUTES = 30;
 const MAX_MINUTES = 16 * 60;
+const LEARNING_MINUTES = 60;
 
 export async function renderMorning(root: HTMLElement, step: string | undefined): Promise<void> {
   if (step === "calendar") return renderCalendarStep(root);
@@ -193,7 +194,10 @@ async function renderBudgetStep(root: HTMLElement, replan: boolean): Promise<voi
 type Draft = { budgets: Record<string, number>; openWork: Record<string, number>; energy: Energy; note: string };
 
 function initialDraft(view: TodayView, replan: boolean): Draft {
-  if (!replan || !view.plan) return { budgets: {}, openWork: {}, energy: "normal", note: "" };
+  if (!replan || !view.plan) {
+    const learning = store.themes.some((theme) => theme.id === "learning") ? { learning: LEARNING_MINUTES } : {};
+    return { budgets: learning, openWork: {}, energy: "normal", note: "" };
+  }
   const budgets: Record<string, number> = {};
   const openWork: Record<string, number> = {};
   for (const theme of view.plan.themes) {
