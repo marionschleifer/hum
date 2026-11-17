@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { CalendarEvent } from "../calendar/calendar.ts";
 import type { TrainingSession } from "../training/training.ts";
-import { defaultBudgets } from "./default-budgets.ts";
+import { defaultBudgets, openWorkFor, plannedMinutes } from "./default-budgets.ts";
 
 function meeting(themeId: string | undefined, minutes: number, blocking = true): CalendarEvent {
   return { id: `m${minutes}${themeId}`, title: "Meeting", allDay: false, start: "", end: "", minutes, blocking, themeId, themeSource: themeId ? "name" : "unknown" };
@@ -36,5 +36,30 @@ describe("defaultBudgets", () => {
 
   it("ignores meetings of themes that are gone", () => {
     expect(defaultBudgets({ themeIds: ["accounto"], meetings: [meeting("hvnly", 60)], training: [] })).toEqual({});
+  });
+});
+
+describe("plannedMinutes", () => {
+  it("is each theme's meetings plus training for Exercise, without the Learning hour", () => {
+    expect(
+      plannedMinutes({ themeIds: themes, meetings: [meeting("accounto", 90)], training: [session("strength", 60)] }),
+    ).toEqual({ accounto: 90, exercise: 60 });
+  });
+});
+
+describe("openWorkFor", () => {
+  const planned = { accounto: 90 };
+
+  it("makes the time added on top of what is planned open work", () => {
+    expect(openWorkFor({ budgets: { accounto: 240, personal: 60 }, planned, chosen: {} })).toEqual({ accounto: 150, personal: 60 });
+  });
+
+  it("keeps an open-work value set by hand, never above the budget", () => {
+    expect(openWorkFor({ budgets: { accounto: 240, personal: 60 }, planned, chosen: { accounto: 30, personal: 120 } })).toEqual({ accounto: 30, personal: 60 });
+  });
+
+  it("has no open work where the budget is only meetings, or below them", () => {
+    expect(openWorkFor({ budgets: { accounto: 90 }, planned, chosen: {} })).toEqual({});
+    expect(openWorkFor({ budgets: { accounto: 60 }, planned, chosen: {} })).toEqual({});
   });
 });

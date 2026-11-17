@@ -1,4 +1,4 @@
-import { defaultBudgets } from "../../src/planning/default-budgets.ts";
+import { defaultBudgets, openWorkFor, plannedMinutes } from "../../src/planning/default-budgets.ts";
 import { eveningApi, planApi, type TodayView } from "../api.ts";
 import { meetingRows, calendarNotice } from "../components/calendar.ts";
 import { minutesField } from "../components/minutes-field.ts";
@@ -55,6 +55,8 @@ async function renderCalendarStep(root: HTMLElement): Promise<void> {
 async function renderBudgetStep(root: HTMLElement, replan: boolean): Promise<void> {
   const view = await planApi.today();
   const draft = initialDraft(view, replan);
+  const planned = plannedMinutes({ themeIds: store.themes.map((theme) => theme.id), meetings: view.meetings, training: view.training });
+  const openWork = () => openWorkFor({ budgets: draft.budgets, planned, chosen: draft.chosenOpen });
   const rows = h("div", { class: "card" });
   const energyRow = h("div");
   const note = h("textarea", { "aria-label": "Anything else about today", placeholder: "Anything else about today? (optional)" }, draft.note);
@@ -66,14 +68,13 @@ async function renderBudgetStep(root: HTMLElement, replan: boolean): Promise<voi
       store.themes.map((theme) => {
         const minutes = draft.budgets[theme.id] ?? 0;
         const meetings = view.meetings.filter((e) => e.themeId === theme.id && e.blocking).reduce((sum, e) => sum + e.minutes, 0);
-        const open = Math.min(minutes, draft.openWork[theme.id] ?? 0);
+        const open = openWork()[theme.id] ?? 0;
         const setBudget = (next: number) => {
           draft.budgets[theme.id] = Math.min(MAX_MINUTES, Math.max(0, next));
-          draft.openWork[theme.id] = Math.min(draft.budgets[theme.id]!, open);
           renderRows();
         };
         const setOpen = (next: number) => {
-          draft.openWork[theme.id] = Math.min(minutes, Math.max(0, next));
+          draft.chosenOpen[theme.id] = Math.min(minutes, Math.max(0, next));
           renderRows();
         };
         const change = (delta: number) => setBudget(minutes + delta);
@@ -142,7 +143,7 @@ async function renderBudgetStep(root: HTMLElement, replan: boolean): Promise<voi
     try {
       const parsed = await planApi.parse(said.value);
       Object.assign(draft.budgets, parsed.budgets);
-      Object.assign(draft.openWork, parsed.openWork ?? {});
+      Object.assign(draft.chosenOpen, parsed.openWork ?? {});
       if (parsed.energy) draft.energy = parsed.energy as Energy;
       if (parsed.note) note.value = [note.value, parsed.note].filter(Boolean).join("\n");
       renderRows();
@@ -157,10 +158,7 @@ async function renderBudgetStep(root: HTMLElement, replan: boolean): Promise<voi
     button.disabled = true;
     button.textContent = "Planning...";
     try {
-      const openWork = Object.fromEntries(
-        Object.entries(draft.openWork).map(([themeId, minutes]) => [themeId, Math.min(minutes, draft.budgets[themeId] ?? 0)]),
-      );
-      await planApi.make({ energy: draft.energy, energyNote: note.value, budgets: draft.budgets, openWork });
+      await planApi.make({ energy: draft.energy, energyNote: note.value, budgets: draft.budgets, openWork: openWork() });
       location.hash = "#/today";
     } catch (error) {
       toast((error as Error).message, "error");
@@ -191,21 +189,21 @@ async function renderBudgetStep(root: HTMLElement, replan: boolean): Promise<voi
   );
 }
 
-type Draft = { budgets: Record<string, number>; openWork: Record<string, number>; energy: Energy; note: string };
+type Draft = { budgets: Record<string, number>; chosenOpen: Record<string, number>; energy: Energy; note: string };
 
 function initialDraft(view: TodayView, replan: boolean): Draft {
   if (!replan || !view.plan) {
     const budgets = defaultBudgets({ themeIds: store.themes.map((theme) => theme.id), meetings: view.meetings, training: view.training });
-    return { budgets, openWork: {}, energy: "normal", note: "" };
+    return { budgets, chosenOpen: {}, energy: "normal", note: "" };
   }
   const budgets: Record<string, number> = {};
-  const openWork: Record<string, number> = {};
+  const chosenOpen: Record<string, number> = {};
   for (const theme of view.plan.themes) {
     const done = theme.items.filter((item) => item.doneToday).reduce((sum, item) => sum + item.minutes, 0);
     budgets[theme.themeId] = Math.max(0, theme.budget - done);
-    if (theme.openMinutes) openWork[theme.themeId] = Math.min(budgets[theme.themeId]!, theme.openMinutes);
+    chosenOpen[theme.themeId] = Math.min(budgets[theme.themeId]!, theme.openMinutes);
   }
-  return { budgets, openWork, energy: view.plan.energy, note: view.plan.energyNote ?? "" };
+  return { budgets, chosenOpen, energy: view.plan.energy, note: view.plan.energyNote ?? "" };
 }
 
 function stepHeader(step: number | undefined, title: string, hint: string): HTMLElement {

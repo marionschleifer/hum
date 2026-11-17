@@ -58,7 +58,7 @@ This is the main ritual. There are no templates. Since 2026-11-17 each theme's b
    - High, Normal or Lower,
    - a small, hidden Sick button,
    - optional free text.
-   - Optionally, per theme, how much of the budget is open work: email, admin and anything else that is not a todo (added 2026-10-23). "6 hours Accounto, 2 of that for email" works by voice or text too.
+   - Per theme, how much of the budget is open work: email, admin and anything else that is not a todo (added 2026-10-23). Since 2026-11-17 the time added on top of what is planned (meetings, training) is open work by default, so Hum only plans todos into a theme when Marion lowers its open work. A value she sets herself stays. "6 hours Accounto, 2 of that for email" works by voice or text too.
 4. **AI fills the budgets.** The AI loads the most important tasks per theme into each budget and fits in training.
    - The output is a list per theme, not a timed schedule.
    - Meetings count against their theme's budget.
