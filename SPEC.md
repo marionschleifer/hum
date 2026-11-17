@@ -50,7 +50,7 @@ Todoist forces every task onto a date. Marion's weeks never repeat: a job, trave
 
 ## Morning ritual
 
-This is the main ritual. There are no templates and no default hours, with one exception Marion asked for on 2026-11-17: the Learning theme starts at 1 hour every day, weekends included, and she can change it that day. Every other theme starts blank.
+This is the main ritual. There are no templates. Since 2026-11-17 each theme's budget starts at what is already planned: its meetings that block time, plus today's training for Exercise, plus one free hour for Learning every day, weekends included. Marion adds time from there or changes it.
 
 1. **Sort the inbox.** Skippable. Unsorted items are not planned.
 2. **Show today.** Today's calendar plus tasks that are due or overdue.

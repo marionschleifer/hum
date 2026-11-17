@@ -1,3 +1,4 @@
+import { defaultBudgets } from "../../src/planning/default-budgets.ts";
 import { eveningApi, planApi, type TodayView } from "../api.ts";
 import { meetingRows, calendarNotice } from "../components/calendar.ts";
 import { minutesField } from "../components/minutes-field.ts";
@@ -9,7 +10,6 @@ import { renderInbox } from "./inbox.ts";
 type Energy = "high" | "normal" | "lower" | "sick";
 const STEP_MINUTES = 30;
 const MAX_MINUTES = 16 * 60;
-const LEARNING_MINUTES = 60;
 
 export async function renderMorning(root: HTMLElement, step: string | undefined): Promise<void> {
   if (step === "calendar") return renderCalendarStep(root);
@@ -175,7 +175,7 @@ async function renderBudgetStep(root: HTMLElement, replan: boolean): Promise<voi
   makeButton.addEventListener("click", () => submit(makeButton));
   mount(
     root,
-    replan ? stepHeader(undefined, "Re-plan", "Budgets now show what is left of today.") : stepHeader(3, "Time and energy", "No defaults. Every day starts blank."),
+    replan ? stepHeader(undefined, "Re-plan", "Budgets now show what is left of today.") : stepHeader(3, "Time and energy", "Each theme starts at its meetings and training. Add time from there."),
     h(
       "form",
       { class: "row", style: "flex-wrap:nowrap;margin-bottom:12px", onsubmit: (event: Event) => (event.preventDefault(), void fillFromText()) },
@@ -195,8 +195,8 @@ type Draft = { budgets: Record<string, number>; openWork: Record<string, number>
 
 function initialDraft(view: TodayView, replan: boolean): Draft {
   if (!replan || !view.plan) {
-    const learning = store.themes.some((theme) => theme.id === "learning") ? { learning: LEARNING_MINUTES } : {};
-    return { budgets: learning, openWork: {}, energy: "normal", note: "" };
+    const budgets = defaultBudgets({ themeIds: store.themes.map((theme) => theme.id), meetings: view.meetings, training: view.training });
+    return { budgets, openWork: {}, energy: "normal", note: "" };
   }
   const budgets: Record<string, number> = {};
   const openWork: Record<string, number> = {};
