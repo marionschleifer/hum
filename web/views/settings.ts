@@ -1,6 +1,7 @@
 import type { ImportPreview, ImportSummary, ImportTarget } from "../../src/import/todoist.ts";
 import { api, eveningApi, planApi, trainingApi, type TemplateEntry, type Theme } from "../api.ts";
 import { h, mount, toast } from "../dom.ts";
+import { mailSection } from "../components/mail-settings.ts";
 import { registerPasskey } from "../passkey.ts";
 import { refresh, store } from "../state.ts";
 
@@ -20,6 +21,8 @@ export async function renderSettings(root: HTMLElement): Promise<void> {
     calendarSection(),
     h("h2", {}, "Training week"),
     trainingTemplateSection(),
+    h("h2", {}, "Mail follow-ups"),
+    mailSection(),
     h("h2", {}, "Learnings"),
     learningsSection(),
     h("h2", {}, "iOS Shortcut"),

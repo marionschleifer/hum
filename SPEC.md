@@ -141,7 +141,12 @@ Training minutes (the minimum of each session) count against the Exercise budget
 ## Gmail
 
 - Two accounts: personal and Code Blossom. Each is connected through its own Google OAuth.
-- Capture only from mails Marion explicitly forwards or labels. No inbox scanning.
+- **Mail follow-ups** (decided 2026-11-17, replacing "no inbox scanning"): with read-only Gmail access, once a day Hum looks at recent threads in each connected mailbox.
+  - *Waiting:* Marion's message is the last one, sent 10 to 30 days ago to a real person. Claude decides whether it asked for something; if so, the task is "Follow up with <name>: <subject>".
+  - *Unanswered:* a person wrote 2 to 14 days ago and Marion has not replied (no newsletters, automatic mails or Promotions/Social/Updates/Forums). It becomes "Reply to <name>: <subject>" when Claude judges it high stakes by Marion's own description (career, Code Blossom funding or donations, partnerships) or the sender is on her Always important list.
+  - Each task goes into the theme set for that mailbox, is size S, says why it was created and links to the thread. A thread gets a task only once, even after it is dropped. The task closes itself when the thread moves on: they reply to a follow-up, or Marion answers.
+  - Claude sees the sender, recipients, subject and Gmail's short preview, never attachments. Hum remembers each verdict and only asks again when the thread has a new message.
+- Accounto mail (Outlook) is left out: it would need an app approved in Accounto's Microsoft 365.
 - For clear personal or Code Blossom tasks, a "Draft it" button creates a real Gmail draft in the matching account.
 - Hum never requests the send scope. Hum never sends anything.
 

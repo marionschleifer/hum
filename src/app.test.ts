@@ -90,6 +90,8 @@ describe("privacy page", () => {
     expect(response.headers.get("content-type")).toContain("text/html");
     const page = await response.text();
     expect(page).toContain("read-only access to Google Calendar");
+    expect(page).toContain("read-only access to that mailbox");
+    expect(page).toContain("Hum never sends, changes or deletes email");
     expect(page).toContain("used by Ada alone");
     expect(page).not.toContain("—");
   });
