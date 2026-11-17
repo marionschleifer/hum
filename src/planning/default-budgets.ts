@@ -23,6 +23,10 @@ export function plannedMinutes(input: PlanInputs): Record<string, number> {
   return planned;
 }
 
+export function hasOpenWork(themeId: string): boolean {
+  return themeId !== EXERCISE_THEME_ID;
+}
+
 export function openWorkFor(input: {
   budgets: Record<string, number>;
   planned: Record<string, number>;
@@ -30,6 +34,7 @@ export function openWorkFor(input: {
 }): Record<string, number> {
   const open: Record<string, number> = {};
   for (const [themeId, budget] of Object.entries(input.budgets)) {
+    if (!hasOpenWork(themeId)) continue;
     const chosen = input.chosen[themeId];
     const minutes = chosen === undefined ? budget - (input.planned[themeId] ?? 0) : Math.min(budget, chosen);
     if (minutes > 0) open[themeId] = minutes;

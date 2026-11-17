@@ -58,6 +58,11 @@ describe("openWorkFor", () => {
     expect(openWorkFor({ budgets: { accounto: 240, personal: 60 }, planned, chosen: { accounto: 30, personal: 120 } })).toEqual({ accounto: 30, personal: 60 });
   });
 
+  it("never gives Exercise open work, even when set by hand", () => {
+    expect(openWorkFor({ budgets: { exercise: 120 }, planned: { exercise: 60 }, chosen: {} })).toEqual({});
+    expect(openWorkFor({ budgets: { exercise: 120 }, planned: {}, chosen: { exercise: 30 } })).toEqual({});
+  });
+
   it("has no open work where the budget is only meetings, or below them", () => {
     expect(openWorkFor({ budgets: { accounto: 90 }, planned, chosen: {} })).toEqual({});
     expect(openWorkFor({ budgets: { accounto: 60 }, planned, chosen: {} })).toEqual({});

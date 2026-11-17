@@ -1,4 +1,4 @@
-import { defaultBudgets, openWorkFor, plannedMinutes } from "../../src/planning/default-budgets.ts";
+import { defaultBudgets, hasOpenWork, openWorkFor, plannedMinutes } from "../../src/planning/default-budgets.ts";
 import { eveningApi, planApi, type TodayView } from "../api.ts";
 import { meetingRows, calendarNotice } from "../components/calendar.ts";
 import { minutesField } from "../components/minutes-field.ts";
@@ -89,7 +89,7 @@ async function renderBudgetStep(root: HTMLElement, replan: boolean): Promise<voi
             minutesField({ minutes, label: `Time for ${theme.name}`, onChange: setBudget }),
             h("button", { type: "button", class: "icon-btn", "aria-label": `More time for ${theme.name}`, onclick: () => change(STEP_MINUTES) }, "+"),
           ),
-          minutes
+          minutes && hasOpenWork(theme.id) && theme.id !== "learning"
             ? h(
                 "div",
                 { class: "task budget-row open-row", style: "cursor:default;align-items:center" },
