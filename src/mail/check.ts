@@ -20,6 +20,7 @@ export type MailRun = { at: string; accounts: AccountRun[] };
 type Verdict = { task: boolean; reason: string };
 
 const LAST_RUN_KEY = "mail_last_run";
+const RUN_EVERY_MS = 20 * 60 * 60 * 1000;
 const GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me";
 const THREADS_PER_QUERY = "50";
 const SUBJECT_LENGTH = 80;
@@ -44,6 +45,10 @@ export async function runMailCheck(deps: MailDeps, today: string): Promise<MailR
     .query("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
     .run(LAST_RUN_KEY, JSON.stringify(run));
   return run;
+}
+
+export function mailRunDue(last: MailRun | undefined, now: Date): boolean {
+  return !last || now.getTime() - new Date(last.at).getTime() >= RUN_EVERY_MS;
 }
 
 export function lastMailRun(ctx: Ctx): MailRun | undefined {

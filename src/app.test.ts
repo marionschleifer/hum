@@ -36,6 +36,31 @@ async function loggedIn(overrides: Partial<AppDeps> = {}) {
   return { ...env, as, authenticator, cookie };
 }
 
+describe("mail", () => {
+  it("connects a mailbox, saves its theme and the stakes, and runs the check on demand", async () => {
+    const oauth = { clientId: "id", clientSecret: "secret", redirectUri: `${origin}/api/google/callback` };
+    const googleFetch = (async (url: string) =>
+      url.includes("oauth2.googleapis.com")
+        ? Response.json({ access_token: "a", refresh_token: "r", scope: "https://www.googleapis.com/auth/gmail.readonly" })
+        : Response.json({ emailAddress: "me@blossom.example" })) as typeof fetch;
+    const api = { get: async <T>() => ({ threads: [] }) as T };
+    const { as, ctx } = await loggedIn({ google: { oauth, api, fetch: googleFetch } });
+    const consent = new URL((await as("GET", "/api/google/connect?purpose=mail")).headers.get("location")!);
+    expect(consent.searchParams.get("scope")).toBe("https://www.googleapis.com/auth/gmail.readonly");
+    await as("GET", `/api/google/callback?code=abc&state=${consent.searchParams.get("state")}`);
+    expect((await as("GET", "/api/mail")).body.settings.accounts).toEqual([{ email: "me@blossom.example" }]);
+    expect((await as("GET", "/api/google/status")).body.settings.account).toBeUndefined();
+    const saved = await as("PUT", "/api/mail/settings", { accounts: [{ email: "me@blossom.example", themeId: "code-blossom" }], stakes: "funding" });
+    expect(saved.body).toMatchObject({ accounts: [{ email: "me@blossom.example", themeId: "code-blossom" }], stakes: "funding" });
+    const run = await as("POST", "/api/mail/check", { today: "2026-10-17" });
+    expect(run.body.accounts).toEqual([{ email: "me@blossom.example", checked: 0, created: 0, closed: 0 }]);
+    expect((await as("GET", "/api/mail")).body.lastRun.accounts).toHaveLength(1);
+    expect((await as("DELETE", "/api/mail/accounts/me%40blossom.example")).status).toBe(200);
+    expect((await as("GET", "/api/mail")).body.settings.accounts).toEqual([]);
+    expect(ctx).toBeDefined();
+  });
+});
+
 describe("learning", () => {
   it("adds items, fills a video's title from YouTube, moves books and lists it all", async () => {
     const env = setup({ videoTitle: async (url) => (url.includes("youtu") ? "How SQLite works" : undefined) });

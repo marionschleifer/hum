@@ -1,4 +1,5 @@
 import type { FindLearning, SuggestForTasks } from "./ai/evening.ts";
+import type { JudgeMail } from "./ai/mail.ts";
 import type { ChoosePlan, ParseBudgets } from "./ai/planning.ts";
 import type { StructureCapture, Transcribe } from "./ai/types.ts";
 import { sha256Hex } from "./auth/encoding.ts";
@@ -47,6 +48,8 @@ import {
 import { privacyPage } from "./http/privacy.ts";
 import { createRouter, json, readJson, type Handler, type Route } from "./http/router.ts";
 import { previewImport, runImport, type ImportTarget, type TodoistData } from "./import/todoist.ts";
+import { lastMailRun, runMailCheck } from "./mail/check.ts";
+import { addMailAccount, mailSettings, removeMailAccount, saveMailSettings, type MailSettings } from "./mail/settings.ts";
 import { addLearningItem, listLearning, setBookStatus, type BookStatus, type LearningKind } from "./learning/learning.ts";
 import { addLearning, deleteLearning, listLearnings, updateLearning } from "./learnings/learnings.ts";
 import { giveTimeToday, letGo, moveAtRisk, moveDeadline, scheduleForTomorrow, splitFirstStep } from "./planning/at-risk.ts";
@@ -87,6 +90,7 @@ export type AppDeps = {
   transcribe?: Transcribe;
   fetchTodoist?: () => Promise<TodoistData>;
   videoTitle?: (url: string) => Promise<string | undefined>;
+  judgeMail?: JudgeMail;
   google?: { oauth: GoogleOAuthConfig; api: GoogleApi; fetch?: typeof fetch };
   choosePlan?: ChoosePlan;
   parseBudgets?: ParseBudgets;
@@ -96,7 +100,7 @@ export type AppDeps = {
 };
 
 export function createApp(deps: AppDeps): { fetch: (request: Request) => Promise<Response | undefined> } {
-  const route = createRouter([...publicRoutes(deps), ...authRoutes(deps), ...dataRoutes(deps), ...captureRoutes(deps), ...settingsRoutes(deps), ...calendarRoutes(deps), ...planRoutes(deps), ...eveningRoutes(deps), ...trainingRoutes(deps), ...learningRoutes(deps)]);
+  const route = createRouter([...publicRoutes(deps), ...authRoutes(deps), ...dataRoutes(deps), ...captureRoutes(deps), ...settingsRoutes(deps), ...calendarRoutes(deps), ...planRoutes(deps), ...eveningRoutes(deps), ...trainingRoutes(deps), ...learningRoutes(deps), ...mailRoutes(deps)]);
   return {
     fetch: async (request) => {
       try {
@@ -277,7 +281,9 @@ function calendarRoutes(deps: AppDeps): Route[] {
     guard("GET", "/api/google/status", () =>
       json({ configured: deps.google !== undefined, accounts: connectedAccounts(ctx), settings: calendarSettings(ctx) }),
     ),
-    guard("GET", "/api/google/connect", () => Response.redirect(authorizationUrl(ctx, google().oauth), 302)),
+    guard("GET", "/api/google/connect", (request) =>
+      Response.redirect(authorizationUrl(ctx, google().oauth, query(request, "purpose") === "mail" ? "mail" : "calendar"), 302),
+    ),
     guard("GET", "/api/google/callback", async (request) => {
       const params = new URL(request.url).searchParams;
       try {
@@ -287,8 +293,8 @@ function calendarRoutes(deps: AppDeps): Route[] {
           { code: params.get("code") ?? undefined, state: params.get("state") ?? undefined, error: params.get("error") ?? undefined },
           deps.google?.fetch,
         );
-        const current = calendarSettings(ctx);
-        saveCalendarSettings(ctx, { account: email, mainCalendarId: current.mainCalendarId ?? email });
+        if (purpose === "mail") addMailAccount(ctx, email);
+        else saveCalendarSettings(ctx, { account: email, mainCalendarId: calendarSettings(ctx).mainCalendarId ?? email });
         return Response.redirect(`${deps.config.origin}/#/settings`, 302);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -458,6 +464,30 @@ function trainingRoutes(deps: AppDeps): Route[] {
       const body = await readJson<{ template?: TemplateEntry[] }>(request);
       if (!Array.isArray(body.template)) fail(400, "Which sessions?");
       return json({ template: setTrainingTemplate(ctx, body.template), tenK: TEN_K_WEEK });
+    }),
+  ];
+}
+
+function mailRoutes(deps: AppDeps): Route[] {
+  const { ctx } = deps;
+  const guard = sessionGuard(deps);
+  return [
+    guard("GET", "/api/mail", () =>
+      json({ configured: deps.google !== undefined, judging: deps.judgeMail !== undefined, settings: mailSettings(ctx), lastRun: lastMailRun(ctx) }),
+    ),
+    guard("PUT", "/api/mail/settings", async (request) => {
+      const body = await readJson<Partial<MailSettings>>(request);
+      if (body.accounts !== undefined && !Array.isArray(body.accounts)) fail(400, "Which mailboxes?");
+      if (body.important !== undefined && !Array.isArray(body.important)) fail(400, "Which people?");
+      return json(saveMailSettings(ctx, body));
+    }),
+    guard("DELETE", "/api/mail/accounts/:email", (_request, { email }) => {
+      removeMailAccount(ctx, email!);
+      return json({ ok: true });
+    }),
+    guard("POST", "/api/mail/check", async (request) => {
+      const body = await optionalJson<{ today?: string }>(request);
+      return json(await runMailCheck({ ctx, api: deps.google?.api, judge: deps.judgeMail, log: deps.log }, todayOr(ctx, body.today)));
     }),
   ];
 }

@@ -3,15 +3,24 @@ import { createStructureCapture } from "./ai/claude.ts";
 import { createFindLearning, createSuggestForTasks } from "./ai/evening.ts";
 import { createChoosePlan, createParseBudgets } from "./ai/planning.ts";
 import { createTranscribe } from "./ai/whisper.ts";
-import { createApp } from "./app.ts";
+import { createJudgeMail } from "./ai/mail.ts";
+import { createApp, todayOr } from "./app.ts";
 import { readConfig } from "./config.ts";
 import { openDatabase } from "./db/open.ts";
 import { createGoogleApi } from "./google/google.ts";
 import { createTodoistFetcher } from "./import/todoist.ts";
 import { youtubeTitle } from "./learning/learning.ts";
+import { lastMailRun, mailRunDue, runMailCheck } from "./mail/check.ts";
+import { mailSettings } from "./mail/settings.ts";
+
+const MAIL_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
 const config = readConfig(process.env);
 const ctx = { db: openDatabase(config.dbPath), now: () => new Date(), newId: () => crypto.randomUUID() };
+const google = googleDeps();
+const judgeMail = config.anthropicApiKey
+  ? createJudgeMail({ apiKey: config.anthropicApiKey, model: config.captureModel, ownerName: config.ownerName })
+  : undefined;
 
 const app = createApp({
   ctx,
@@ -24,7 +33,8 @@ const app = createApp({
     : undefined,
   fetchTodoist: config.todoistApiToken ? createTodoistFetcher(config.todoistApiToken) : undefined,
   videoTitle: (url) => youtubeTitle(url),
-  google: googleDeps(),
+  judgeMail,
+  google,
   choosePlan: config.anthropicApiKey
     ? createChoosePlan({ apiKey: config.anthropicApiKey, model: config.planningModel, ownerName: config.ownerName })
     : undefined,
@@ -52,9 +62,17 @@ const server = Bun.serve({
 });
 
 console.log(`Hum is running at ${server.url} (passkeys bound to ${config.origin})`);
+setInterval(() => void checkMailWhenDue(), MAIL_CHECK_INTERVAL_MS);
+void checkMailWhenDue();
 if (!config.anthropicApiKey) console.log("ANTHROPIC_API_KEY is not set: captures go straight to the inbox.");
 if (!config.openaiApiKey) console.log("OPENAI_API_KEY is not set: voice capture is off.");
 if (!config.googleClientId || !config.googleClientSecret) console.log("GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is not set: calendar is off.");
+
+async function checkMailWhenDue(): Promise<void> {
+  if (!google || mailSettings(ctx).accounts.length === 0 || !mailRunDue(lastMailRun(ctx), new Date())) return;
+  const run = await runMailCheck({ ctx, api: google.api, judge: judgeMail }, todayOr(ctx, undefined));
+  console.log(`Mail check: ${run.accounts.map((a) => `${a.email} ${a.error ? `failed (${a.error})` : `${a.created} new, ${a.closed} closed`}`).join("; ")}`);
+}
 
 function googleDeps() {
   if (!config.googleClientId || !config.googleClientSecret) return undefined;

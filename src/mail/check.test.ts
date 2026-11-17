@@ -3,7 +3,7 @@ import { testCtx } from "../../test/helpers.ts";
 import type { JudgeMailInput } from "../ai/mail.ts";
 import type { GoogleApi } from "../google/google.ts";
 import { getTask, listTasks } from "../tasks/tasks.ts";
-import { lastMailRun, runMailCheck } from "./check.ts";
+import { lastMailRun, mailRunDue, runMailCheck } from "./check.ts";
 import { addMailAccount, saveMailSettings } from "./settings.ts";
 import type { GmailMessage, GmailThread } from "./threads.ts";
 
@@ -140,5 +140,13 @@ describe("runMailCheck", () => {
     await runMailCheck({ ctx, api: gmail.api, judge: judgeAll(true), now: () => now }, today);
     expect(gmailTasks(ctx)).toHaveLength(1);
     expect(getTask(ctx, gmailTasks(ctx)[0]!.id)?.size).toBe("S");
+  });
+});
+
+describe("mailRunDue", () => {
+  it("is due without an earlier run, and again 20 hours after the last one", () => {
+    expect(mailRunDue(undefined, now)).toBe(true);
+    expect(mailRunDue({ at: "2026-10-16T13:00:00.000Z", accounts: [] }, now)).toBe(false);
+    expect(mailRunDue({ at: "2026-10-16T12:00:00.000Z", accounts: [] }, now)).toBe(true);
   });
 });
