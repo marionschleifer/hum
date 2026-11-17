@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { testCtx } from "../../test/helpers.ts";
 import {
   CALENDAR_SCOPE,
+  GMAIL_SCOPE,
   authorizationUrl,
   completeAuthorization,
   connectedAccounts,
@@ -22,6 +23,7 @@ function fakeGoogle(overrides: { token?: Record<string, unknown>; tokenStatus?: 
       );
     }
     if (url.includes("calendarList")) return Response.json({ items: [{ id: "marion@example.com", primary: true }, { id: "other" }] });
+    if (url.includes("gmail/v1/users/me/profile")) return Response.json({ emailAddress: "marion@blossom.example" });
     return Response.json({ ok: true, url });
   }) as typeof fetch;
   return { send, calls };
@@ -44,7 +46,7 @@ describe("Google sign-in", () => {
     const ctx = testCtx();
     const { send, calls } = fakeGoogle();
     const state = stateFrom(authorizationUrl(ctx, config));
-    expect(await completeAuthorization(ctx, config, { code: "abc", state }, send)).toBe("marion@example.com");
+    expect(await completeAuthorization(ctx, config, { code: "abc", state }, send)).toEqual({ email: "marion@example.com", purpose: "calendar" });
     expect(calls[0]?.body).toContain("grant_type=authorization_code");
     expect(calls[0]?.body).toContain("code=abc");
     expect(calls[1]?.auth).toBe("Bearer access-1");
@@ -73,6 +75,26 @@ describe("Google sign-in", () => {
     await expect(
       completeAuthorization(ctx, config, { code: "abc", state: stateFrom(authorizationUrl(ctx, config)) }, noRefresh.send),
     ).rejects.toThrow("no refresh token");
+  });
+
+  it("connects a mailbox read-only, naming it from its Gmail profile", async () => {
+    const ctx = testCtx();
+    const url = new URL(authorizationUrl(ctx, config, "mail"));
+    expect(url.searchParams.get("scope")).toBe(GMAIL_SCOPE);
+    expect(url.searchParams.get("login_hint")).toBeNull();
+    const { send } = fakeGoogle({ token: { access_token: "a", refresh_token: "r", scope: GMAIL_SCOPE } });
+    expect(await completeAuthorization(ctx, config, { code: "abc", state: url.searchParams.get("state")! }, send)).toEqual({
+      email: "marion@blossom.example",
+      purpose: "mail",
+    });
+    expect(connectedAccounts(ctx).map((a) => a.email)).toEqual(["marion@blossom.example"]);
+  });
+
+  it("refuses a mail connection without Gmail read access", async () => {
+    const ctx = testCtx();
+    const { send } = fakeGoogle({ token: { access_token: "a", refresh_token: "r", scope: CALENDAR_SCOPE } });
+    const state = stateFrom(authorizationUrl(ctx, config, "mail"));
+    await expect(completeAuthorization(ctx, config, { code: "abc", state }, send)).rejects.toThrow("Gmail access was not granted");
   });
 
   it("passes on Google's error", async () => {
@@ -114,7 +136,7 @@ describe("createGoogleApi", () => {
     const { ctx } = await connected();
     const revoked = fakeGoogle({ token: { error: "invalid_grant" }, tokenStatus: 400 });
     const api = createGoogleApi(ctx, config, revoked.send);
-    await expect(api.get("marion@example.com", "https://www.googleapis.com/x")).rejects.toThrow("Connect Google Calendar again");
+    await expect(api.get("marion@example.com", "https://www.googleapis.com/x")).rejects.toThrow("Connect it again in Settings");
   });
 
   it("needs a connected account", async () => {

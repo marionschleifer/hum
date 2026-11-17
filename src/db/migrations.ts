@@ -263,4 +263,19 @@ export const migrations: string[] = [
   SELECT 'learning', 'Learning', '#e9a23b', COALESCE(MAX(sort_order), 0) + 1, 0 FROM themes
   WHERE NOT EXISTS (SELECT 1 FROM themes WHERE id = 'learning');
   `,
+  `
+  ALTER TABLE oauth_states ADD COLUMN purpose TEXT NOT NULL DEFAULT 'calendar';
+  `,
+  `
+  CREATE TABLE mail_checks (
+    account TEXT NOT NULL,
+    thread_id TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('waiting', 'unanswered')),
+    message_id TEXT NOT NULL,
+    task INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    checked_at TEXT NOT NULL,
+    PRIMARY KEY (account, thread_id, kind)
+  );
+  `,
 ];

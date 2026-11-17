@@ -281,7 +281,7 @@ function calendarRoutes(deps: AppDeps): Route[] {
     guard("GET", "/api/google/callback", async (request) => {
       const params = new URL(request.url).searchParams;
       try {
-        const email = await completeAuthorization(
+        const { email, purpose } = await completeAuthorization(
           ctx,
           google().oauth,
           { code: params.get("code") ?? undefined, state: params.get("state") ?? undefined, error: params.get("error") ?? undefined },
