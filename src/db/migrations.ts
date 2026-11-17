@@ -236,4 +236,23 @@ export const migrations: string[] = [
   ALTER TABLE day_plans ADD COLUMN open_work TEXT NOT NULL DEFAULT '{}';
   ALTER TABLE day_plans ADD COLUMN time_spent TEXT;
   `,
+  `
+  CREATE TABLE training_sessions_new (
+    id TEXT PRIMARY KEY,
+    week_start TEXT NOT NULL,
+    date TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('strength', 'intervals', 'easy', 'tempo', 'long', 'hike', 'rest')),
+    min_minutes INTEGER,
+    max_minutes INTEGER,
+    status TEXT NOT NULL DEFAULT 'planned' CHECK (status IN ('planned', 'done', 'skipped', 'sick')),
+    travel INTEGER NOT NULL DEFAULT 0,
+    note TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  INSERT INTO training_sessions_new SELECT id, week_start, date, kind, min_minutes, max_minutes, status, travel, note, created_at, updated_at FROM training_sessions;
+  DROP TABLE training_sessions;
+  ALTER TABLE training_sessions_new RENAME TO training_sessions;
+  CREATE INDEX training_sessions_week ON training_sessions(week_start, date);
+  `,
 ];

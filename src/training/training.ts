@@ -4,7 +4,7 @@ import { flag, text, type Row } from "../db/rows.ts";
 import { startOfWeek } from "../recurrence/recurrence.ts";
 import { checkDate } from "../tasks/tasks.ts";
 
-export const sessionKinds = ["strength", "intervals", "easy", "tempo", "long", "rest"] as const;
+export const sessionKinds = ["strength", "intervals", "easy", "tempo", "long", "hike", "rest"] as const;
 export type SessionKind = (typeof sessionKinds)[number];
 export const sessionStatuses = ["planned", "done", "skipped", "sick"] as const;
 export type SessionStatus = (typeof sessionStatuses)[number];
@@ -43,10 +43,12 @@ const TITLES: Record<SessionKind, string> = {
   easy: "Easy run",
   tempo: "Tempo run",
   long: "Long run",
+  hike: "Hike",
   rest: "Rest",
 };
 
 const TEMPLATE_KEY = "training_template";
+const KIND_DEFAULTS: TemplateEntry[] = [{ day: 0, kind: "hike", minMinutes: 120 }];
 const DEFAULT_MINUTES = 60;
 const HARD_KINDS: SessionKind[] = ["intervals", "tempo"];
 const DROP_ORDER: SessionKind[] = ["easy", "strength"];
@@ -185,7 +187,7 @@ export function weekWarnings(sessions: TrainingSession[], today: string): Traini
 
 function minutesFor(ctx: Ctx, kind: SessionKind): { minMinutes?: number; maxMinutes?: number } {
   if (kind === "rest") return {};
-  const entry = trainingTemplate(ctx).find((e) => e.kind === kind) ?? TEN_K_WEEK.find((e) => e.kind === kind);
+  const entry = [...trainingTemplate(ctx), ...TEN_K_WEEK, ...KIND_DEFAULTS].find((e) => e.kind === kind);
   return { minMinutes: entry?.minMinutes, maxMinutes: entry?.maxMinutes };
 }
 

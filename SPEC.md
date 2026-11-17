@@ -112,6 +112,8 @@ Rules Hum checks after changes (warnings only, she decides):
 
 The earlier rule "strength never the day before intervals" was dropped because her own template has strength on Monday and intervals on Tuesday.
 
+Besides the template's sessions there is a **hike** (added 2026-11-17). It counts as training but is neither a hard session nor a long run for the rules. Without its own minutes in the template, a hike counts as at least 2 hours.
+
 Training minutes (the minimum of each session) count against the Exercise budget in the morning plan.
 
 ## Calendar

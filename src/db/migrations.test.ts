@@ -35,6 +35,18 @@ describe("migrations", () => {
     expect(trainingTemplate({ db, now: () => new Date(), newId: () => "id" })).toEqual(TEN_K_WEEK);
   });
 
+  it("keeps existing training sessions when it allows hikes", () => {
+    const db = databaseAt(9);
+    db.exec(`INSERT INTO training_sessions (id, week_start, date, kind, min_minutes, status, travel, note, created_at, updated_at)
+      VALUES ('s1', '2026-10-12', '2026-10-12', 'strength', 60, 'done', 1, 'felt good', 'a', 'b')`);
+    migrate(db);
+    expect(db.query("SELECT id, kind, min_minutes, status, travel, note FROM training_sessions").all()).toEqual([
+      { id: "s1", kind: "strength", min_minutes: 60, status: "done", travel: 1, note: "felt good" },
+    ]);
+    db.exec(`INSERT INTO training_sessions (id, week_start, date, kind, created_at, updated_at) VALUES ('s2', '2026-10-12', '2026-10-17', 'hike', 'a', 'b')`);
+    expect(() => db.exec(`INSERT INTO training_sessions (id, week_start, date, kind, created_at, updated_at) VALUES ('s3', '2026-10-12', '2026-10-17', 'yoga', 'a', 'b')`)).toThrow();
+  });
+
   it("leaves the themes of an existing install as they were", () => {
     const db = databaseAt(TRAINING_VERSION);
     db.exec("INSERT INTO themes (id, name, color, sort_order, is_accounto) VALUES ('accounto', 'Accounto', '#2f6fde', 9, 1)");

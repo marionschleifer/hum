@@ -134,6 +134,7 @@ const SESSION_LABELS: Record<TemplateEntry["kind"], string> = {
   easy: "Easy run",
   tempo: "Tempo run",
   long: "Long run",
+  hike: "Hike",
   rest: "Rest",
 };
 

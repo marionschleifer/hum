@@ -24,6 +24,7 @@ function session(date: string, kind: SessionKind, status: SessionStatus = "plann
     easy: "Easy run",
     tempo: "Tempo run",
     long: "Long run",
+    hike: "Hike",
     rest: "Rest",
   };
   return { id: `s${++counter}`, date, kind, title: titles[kind], status, travel: false };
@@ -203,6 +204,28 @@ describe("changing a session's kind", () => {
     const strength = week(ctx).sessions[0]!;
     expect(updateSession(ctx, strength.id, { kind: "long" })).toMatchObject({ minMinutes: 75, maxMinutes: 100 });
     expect(() => updateSession(ctx, strength.id, { kind: "yoga" as never })).toThrow("Invalid session");
+  });
+});
+
+describe("hikes", () => {
+  it("turns a session into a hike of at least two hours, which counts against the Exercise budget", () => {
+    const ctx = testCtx();
+    const easy = week(ctx).sessions.find((s) => s.kind === "easy")!;
+    const hike = updateSession(ctx, easy.id, { kind: "hike" });
+    expect(hike).toMatchObject({ kind: "hike", title: "Hike", minMinutes: 120 });
+    expect(sessionMinutes(hike)).toBe(120);
+  });
+
+  it("can be added to an empty day and planned in the template with its own minutes", () => {
+    const ctx = freshTestCtx();
+    setTrainingTemplate(ctx, [{ day: 5, kind: "hike", minMinutes: 180, maxMinutes: 300 }]);
+    expect(layout(week(ctx).sessions)).toEqual(["24 Hike"]);
+    expect(addSession(ctx, "2026-10-25", "hike")).toMatchObject({ kind: "hike", minMinutes: 180, maxMinutes: 300 });
+  });
+
+  it("is not a hard session and not a long run for the rules", () => {
+    const sessions = [session("2026-10-24", "hike"), session("2026-10-25", "intervals"), session("2026-10-26", "rest")];
+    expect(weekWarnings(sessions, monday).map((w) => w.message)).not.toContain("Intervals is the day after the long run.");
   });
 });
 
