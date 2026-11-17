@@ -11,7 +11,7 @@ const TRAINING_VERSION = 7;
 describe("migrations", () => {
   it("starts a fresh install with neutral themes and nothing flagged as scheduling only", () => {
     const themes = listThemes(freshTestCtx());
-    expect(themes.map((t) => t.name)).toEqual(["Work", "Personal", "Exercise"]);
+    expect(themes.map((t) => t.name)).toEqual(["Work", "Personal", "Exercise", "Learning"]);
     expect(themes.map((t) => t.id)).toContain("exercise");
     expect(themes.some((t) => t.isAccounto)).toBe(false);
   });
@@ -45,6 +45,14 @@ describe("migrations", () => {
     ]);
     db.exec(`INSERT INTO training_sessions (id, week_start, date, kind, created_at, updated_at) VALUES ('s2', '2026-10-12', '2026-10-17', 'hike', 'a', 'b')`);
     expect(() => db.exec(`INSERT INTO training_sessions (id, week_start, date, kind, created_at, updated_at) VALUES ('s3', '2026-10-12', '2026-10-17', 'yoga', 'a', 'b')`)).toThrow();
+  });
+
+  it("adds a Learning theme after an existing install's own themes", () => {
+    const db = databaseAt(10);
+    db.exec("INSERT INTO themes (id, name, color, sort_order, is_accounto) VALUES ('hvnly', 'hvnly', '#7a5af5', 7, 0)");
+    migrate(db);
+    const learning = db.query<{ name: string; sort_order: number }, []>("SELECT name, sort_order FROM themes WHERE id = 'learning'").get();
+    expect(learning).toEqual({ name: "Learning", sort_order: 8 });
   });
 
   it("leaves the themes of an existing install as they were", () => {

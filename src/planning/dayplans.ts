@@ -4,6 +4,7 @@ import { isValidTimeZone } from "../calendar/time.ts";
 import { fail, isoNow, type Ctx } from "../context.ts";
 import type { GoogleApi } from "../google/google.ts";
 import { atRiskItems, withoutLetGo, type AtRiskItem } from "./at-risk.ts";
+import { LEARNING_THEME_ID } from "../learning/learning.ts";
 import { learningTexts } from "../learnings/learnings.ts";
 import { checkDate, getTask, listTasks, updateTask, type Task } from "../tasks/tasks.ts";
 import { listThemes, normalizeName, type Theme } from "../themes/themes.ts";
@@ -67,7 +68,7 @@ export async function makeDayPlan(deps: PlanDeps, request: PlanRequest): Promise
   if (!energies.includes(request.energy)) fail(400, "Invalid energy");
   const themes = listThemes(ctx);
   const budgets = cleanBudgets(request.budgets, themes);
-  const openWork = cleanOpenWork(request.openWork ?? {}, budgets, themes);
+  const openWork = { ...cleanOpenWork(request.openWork ?? {}, budgets, themes), ...freeLearningHour(budgets) };
   const calendar = await readCalendar(deps, today, timeZone);
   const tasks = listTasks(ctx, { status: ["open"] }, today);
   const plans = planDay({
@@ -97,7 +98,9 @@ export async function todayView(deps: PlanDeps, today: string, timeZone: string)
   const due = open.filter((task) => !task.parentId && task.deadline !== undefined && task.deadline <= today);
   const plan = storedPlan(ctx, today, calendar.meetings, training);
   const plannedIds = new Set(plan?.themes.flatMap((theme) => theme.items.map((item) => item.taskId)) ?? []);
-  const budgets = Object.fromEntries(plan?.themes.map((theme) => [theme.themeId, theme.budget - theme.openMinutes]) ?? []);
+  const budgets = Object.fromEntries(
+    plan?.themes.map((theme) => [theme.themeId, theme.themeId === LEARNING_THEME_ID ? theme.budget : theme.budget - theme.openMinutes]) ?? [],
+  );
   const warnings = plan ? atRiskItems(ctx, today, deadlineWarnings({ today, budgets, tasks: withoutLetGo(ctx, open) }, plannedIds), open) : [];
   return {
     date: today,
@@ -424,6 +427,10 @@ function cleanOpenWork(openWork: Record<string, number>, budgets: Record<string,
     if (minutes > 0) clean[theme.id] = minutes;
   }
   return clean;
+}
+
+function freeLearningHour(budgets: Record<string, number>): Record<string, number> {
+  return budgets[LEARNING_THEME_ID] ? { [LEARNING_THEME_ID]: budgets[LEARNING_THEME_ID] } : {};
 }
 
 function clampMinutes(minutes: number): number {

@@ -255,4 +255,12 @@ export const migrations: string[] = [
   ALTER TABLE training_sessions_new RENAME TO training_sessions;
   CREATE INDEX training_sessions_week ON training_sessions(week_start, date);
   `,
+  `
+  ALTER TABLE tasks ADD COLUMN kind TEXT NOT NULL DEFAULT 'task' CHECK (kind IN ('task', 'book', 'video'));
+  ALTER TABLE tasks ADD COLUMN url TEXT;
+  ALTER TABLE tasks ADD COLUMN reading INTEGER NOT NULL DEFAULT 0;
+  INSERT INTO themes (id, name, color, sort_order, is_accounto)
+  SELECT 'learning', 'Learning', '#e9a23b', COALESCE(MAX(sort_order), 0) + 1, 0 FROM themes
+  WHERE NOT EXISTS (SELECT 1 FROM themes WHERE id = 'learning');
+  `,
 ];

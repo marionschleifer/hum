@@ -36,6 +36,28 @@ async function loggedIn(overrides: Partial<AppDeps> = {}) {
   return { ...env, as, authenticator, cookie };
 }
 
+describe("learning", () => {
+  it("adds items, fills a video's title from YouTube, moves books and lists it all", async () => {
+    const env = setup({ videoTitle: async (url) => (url.includes("youtu") ? "How SQLite works" : undefined) });
+    env.ctx.db.exec("INSERT INTO themes (id, name, color, sort_order, is_accounto) VALUES ('learning', 'Learning', '#e9a23b', 6, 0)");
+    const authenticator = await createFakeAuthenticator("localhost", origin);
+    const options = await env.call("POST", "/api/auth/register/options", { setupToken: "let-me-in" });
+    const verified = await env.call("POST", "/api/auth/register/verify", { setupToken: "let-me-in", credential: await authenticator.register(options.body.challenge) });
+    const cookie = verified.headers.get("set-cookie")!.split(";")[0]!;
+    const as = (method: string, path: string, body?: unknown) => env.call(method, path, body, { cookie });
+    const video = await as("POST", "/api/learning", { kind: "video", url: "https://youtu.be/abc" });
+    expect(video.status).toBe(201);
+    expect(video.body).toMatchObject({ kind: "video", title: "How SQLite works" });
+    const book = (await as("POST", "/api/learning", { kind: "book", title: "Dune" })).body;
+    expect((await as("POST", `/api/learning/${book.id}/book`, { status: "reading", today: "2026-11-17" })).body.reading).toBe(true);
+    const list = (await as("GET", "/api/learning")).body;
+    expect(list.reading.map((i: { title: string }) => i.title)).toEqual(["Dune"]);
+    expect(list.videos.map((i: { url: string }) => i.url)).toEqual(["https://youtu.be/abc"]);
+    expect((await as("POST", "/api/learning", {})).status).toBe(400);
+    expect((await env.call("GET", "/api/learning")).status).toBe(401);
+  });
+});
+
 describe("privacy page", () => {
   it("is public and says what Hum does with Google data, naming the owner", async () => {
     const response = (await createApp({ ctx: testCtx(), config: { ...config, ownerName: "Ada" } }).fetch(new Request(`${origin}/privacy`)))!;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { testCtx } from "../../test/helpers.ts";
+import { freshTestCtx, testCtx } from "../../test/helpers.ts";
 import type { PlanChoiceInput } from "../ai/planning.ts";
 import { saveCalendarSettings } from "../calendar/calendar.ts";
 import type { GoogleApi } from "../google/google.ts";
@@ -79,6 +79,16 @@ describe("makeDayPlan", () => {
     expect(view.warnings.map((w) => w.detail)).toEqual([
       "is due tomorrow. About 4h of work in this theme is due by then, and today's pace gives 1h.",
     ]);
+  });
+
+  it("keeps the whole Learning budget as a free hour, but still shows a learning task picked for today", async () => {
+    const ctx = freshTestCtx();
+    createTask(ctx, { title: "Practice joins", source: "manual", themeId: "learning", size: "S", sizeConfirmed: true });
+    const picked = createTask(ctx, { title: "Watch the index talk", source: "manual", themeId: "learning", size: "S", sizeConfirmed: true, firstOn: today });
+    const view = await makeDayPlan({ ctx }, { today, timeZone: tz, energy: "normal", budgets: { learning: 60 } });
+    const learning = view.plan!.themes.find((t) => t.themeId === "learning")!;
+    expect(learning).toMatchObject({ budget: 60, openMinutes: 60, available: 0 });
+    expect(learning.items.map((i) => i.taskId)).toEqual([picked.id]);
   });
 
   it("lets Claude choose from the pool but enforces budget and mandatory tasks", async () => {

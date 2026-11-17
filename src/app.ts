@@ -47,6 +47,7 @@ import {
 import { privacyPage } from "./http/privacy.ts";
 import { createRouter, json, readJson, type Handler, type Route } from "./http/router.ts";
 import { previewImport, runImport, type ImportTarget, type TodoistData } from "./import/todoist.ts";
+import { addLearningItem, listLearning, setBookStatus, type BookStatus, type LearningKind } from "./learning/learning.ts";
 import { addLearning, deleteLearning, listLearnings, updateLearning } from "./learnings/learnings.ts";
 import { giveTimeToday, letGo, moveAtRisk, moveDeadline, scheduleForTomorrow, splitFirstStep } from "./planning/at-risk.ts";
 import { makeDayPlan, parseMorningNote, parseTimeSpent, pickForToday, todayView, type PlanRequest } from "./planning/dayplans.ts";
@@ -85,6 +86,7 @@ export type AppDeps = {
   structure?: StructureCapture;
   transcribe?: Transcribe;
   fetchTodoist?: () => Promise<TodoistData>;
+  videoTitle?: (url: string) => Promise<string | undefined>;
   google?: { oauth: GoogleOAuthConfig; api: GoogleApi; fetch?: typeof fetch };
   choosePlan?: ChoosePlan;
   parseBudgets?: ParseBudgets;
@@ -94,7 +96,7 @@ export type AppDeps = {
 };
 
 export function createApp(deps: AppDeps): { fetch: (request: Request) => Promise<Response | undefined> } {
-  const route = createRouter([...publicRoutes(deps), ...authRoutes(deps), ...dataRoutes(deps), ...captureRoutes(deps), ...settingsRoutes(deps), ...calendarRoutes(deps), ...planRoutes(deps), ...eveningRoutes(deps), ...trainingRoutes(deps)]);
+  const route = createRouter([...publicRoutes(deps), ...authRoutes(deps), ...dataRoutes(deps), ...captureRoutes(deps), ...settingsRoutes(deps), ...calendarRoutes(deps), ...planRoutes(deps), ...eveningRoutes(deps), ...trainingRoutes(deps), ...learningRoutes(deps)]);
   return {
     fetch: async (request) => {
       try {
@@ -456,6 +458,24 @@ function trainingRoutes(deps: AppDeps): Route[] {
       const body = await readJson<{ template?: TemplateEntry[] }>(request);
       if (!Array.isArray(body.template)) fail(400, "Which sessions?");
       return json({ template: setTrainingTemplate(ctx, body.template), tenK: TEN_K_WEEK });
+    }),
+  ];
+}
+
+function learningRoutes(deps: AppDeps): Route[] {
+  const { ctx } = deps;
+  const guard = sessionGuard(deps);
+  return [
+    guard("GET", "/api/learning", () => json(listLearning(ctx))),
+    guard("POST", "/api/learning", async (request) => {
+      const body = await readJson<{ kind?: LearningKind; title?: string; url?: string }>(request);
+      const kind = body.kind ?? fail(400, "Task, book or video?");
+      const title = body.title?.trim() || (kind === "video" && body.url ? await deps.videoTitle?.(body.url.trim()) : undefined);
+      return json(addLearningItem(ctx, { kind, title, url: body.url }), 201);
+    }),
+    guard("POST", "/api/learning/:id/book", async (request, { id }) => {
+      const body = await readJson<{ status?: BookStatus; today?: string }>(request);
+      return json(setBookStatus(ctx, id!, body.status ?? fail(400, "Which status?"), todayOr(ctx, body.today)));
     }),
   ];
 }

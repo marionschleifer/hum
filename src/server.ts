@@ -8,6 +8,7 @@ import { readConfig } from "./config.ts";
 import { openDatabase } from "./db/open.ts";
 import { createGoogleApi } from "./google/google.ts";
 import { createTodoistFetcher } from "./import/todoist.ts";
+import { youtubeTitle } from "./learning/learning.ts";
 
 const config = readConfig(process.env);
 const ctx = { db: openDatabase(config.dbPath), now: () => new Date(), newId: () => crypto.randomUUID() };
@@ -22,6 +23,7 @@ const app = createApp({
     ? createTranscribe({ apiKey: config.openaiApiKey, model: config.transcribeModel })
     : undefined,
   fetchTodoist: config.todoistApiToken ? createTodoistFetcher(config.todoistApiToken) : undefined,
+  videoTitle: (url) => youtubeTitle(url),
   google: googleDeps(),
   choosePlan: config.anthropicApiKey
     ? createChoosePlan({ apiKey: config.anthropicApiKey, model: config.planningModel, ownerName: config.ownerName })
